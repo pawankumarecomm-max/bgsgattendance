@@ -1,0 +1,2621 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Jhajjar Unit · Payroll Manager</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#f4f5f7;--card:#fff;--border:#e5e7eb;--text:#111827;--muted:#6b7280;
+  --accent:#f5a623;--green:#16a34a;--red:#dc2626;--blue:#2563eb;
+  --purple:#7c3aed;--teal:#0d9488;--r:12px;--rs:8px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);display:flex;min-height:100vh;font-size:13px}
+::-webkit-scrollbar{width:4px;height:4px}::-webkit-scrollbar-thumb{background:#d1d5db;border-radius:10px}
+.sidebar{width:220px;min-width:220px;background:#141720;display:flex;flex-direction:column;position:fixed;top:0;left:0;bottom:0;z-index:100;overflow-y:auto}
+.s-logo{display:flex;align-items:center;gap:10px;padding:20px 18px 16px;border-bottom:1px solid rgba(255,255,255,.07)}
+.s-icon{width:38px;height:38px;background:linear-gradient(135deg,#f5a623,#f97316);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+.s-title strong{font-size:15px;font-weight:600;color:#fff;display:block}
+.s-title span{font-size:10px;color:#7b82a0}
+.s-sec{padding:14px 10px 4px}
+.s-lbl{font-size:9px;letter-spacing:1.2px;text-transform:uppercase;color:#7b82a0;padding:0 8px;margin-bottom:4px}
+.nav{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:var(--rs);cursor:pointer;color:#9ca3af;font-size:12.5px;transition:all .15s;margin-bottom:1px;border:none;background:none;width:100%;text-align:left;position:relative;font-family:inherit}
+.nav:hover{background:rgba(255,255,255,.06);color:#e8eaf0}
+.nav.active{background:rgba(245,166,35,.13);color:var(--accent);font-weight:500}
+.nav.active::before{content:'';position:absolute;left:0;top:4px;bottom:4px;width:3px;background:var(--accent);border-radius:0 3px 3px 0}
+.s-foot{margin-top:auto;padding:12px 10px;border-top:1px solid rgba(255,255,255,.07)}
+.u-row{display:flex;align-items:center;gap:10px;padding:8px 10px}
+.u-av{width:32px;height:32px;background:linear-gradient(135deg,#f5a623,#f97316);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;color:#000}
+.u-info strong{display:block;font-size:12px;color:#e8eaf0;font-weight:500}
+.u-info span{font-size:10px;color:#22c55e}
+.main{margin-left:220px;flex:1;display:flex;flex-direction:column;min-height:100vh}
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:14px 24px;border-bottom:1px solid var(--border);background:#fff;position:sticky;top:0;z-index:50;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+.topbar h1{font-size:19px;font-weight:600}
+.topbar-r{display:flex;align-items:center;gap:10px}
+.pill{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;font-size:11px;font-weight:500;border:1px solid}
+.pill-ok{background:#f0fdf4;color:var(--green);border-color:#bbf7d0}
+.pill-err{background:#fef2f2;color:var(--red);border-color:#fecaca}
+.pill-busy{background:#f9fafb;color:var(--muted);border-color:#e5e7eb}
+.pdot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.pill-ok .pdot{background:var(--green);animation:pulse 2s infinite}
+.pill-err .pdot{background:var(--red)}
+.pill-busy .pdot{background:var(--muted);animation:pulse .6s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.btn-add{background:linear-gradient(135deg,#f5a623,#f97316);color:#000;border:none;padding:7px 15px;border-radius:var(--rs);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit}
+.page{display:none;padding:20px 24px;animation:fi .25s ease}
+.page.active{display:block}
+@keyframes fi{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
+.stat-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}
+.stat-card{background:#fff;border:1px solid var(--border);border-radius:var(--r);padding:16px 18px;box-shadow:0 1px 3px rgba(0,0,0,.04)}
+.stat-label{font-size:9px;text-transform:uppercase;letter-spacing:.9px;color:var(--muted);margin-bottom:7px}
+.stat-val{font-size:22px;font-weight:600;font-family:'DM Mono',monospace}
+.sv-g{color:var(--green)}.sv-a{color:#d97706}.sv-b{color:var(--blue)}
+.s3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px}
+.s3c{background:#fff;border:1px solid var(--border);border-radius:var(--r);padding:18px 20px;display:flex;align-items:center;gap:14px}
+.s3i{width:42px;height:42px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px}
+.ig{background:rgba(22,163,74,.1)}.ir{background:rgba(220,38,38,.08)}.ib{background:rgba(37,99,235,.1)}
+.s3n{font-size:30px;font-weight:600;font-family:'DM Mono',monospace;line-height:1}
+.s3l{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.7px;margin-top:2px}
+.card{background:#fff;border:1px solid var(--border);border-radius:var(--r);margin-bottom:14px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.04)}
+.card-hdr{display:flex;align-items:center;justify-content:space-between;padding:12px 18px;border-bottom:1px solid var(--border);flex-wrap:wrap;gap:8px}
+.card-hdr h3{font-size:13px;font-weight:500}
+.cha{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.g2{display:grid;grid-template-columns:1fr 300px;gap:14px}
+.rcol{display:flex;flex-direction:column;gap:14px}
+.tbl{width:100%;border-collapse:collapse;font-size:12px}
+.tbl th{font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);padding:8px 14px;text-align:left;font-weight:500;border-bottom:1px solid var(--border);background:#f9fafb;white-space:nowrap}
+.tbl td{padding:7px 14px;border-bottom:1px solid #f3f4f6;vertical-align:middle}
+.tbl tr:hover td{background:#fafafa}
+.tbl tr:last-child td{border-bottom:none}
+.tfr td{font-weight:600;background:#f3f4f6;border-top:1px solid var(--border)}
+.mono{font-family:'DM Mono',monospace}
+.cg{color:var(--green)}.cr{color:var(--red)}.cb{color:var(--blue)}.ca{color:#d97706}.cm{color:var(--muted)}
+.badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:600}
+.bp{background:#dcfce7;color:#15803d}.ba{background:#fee2e2;color:#b91c1c}
+.bh{background:#f3f4f6;color:#6b7280}.b5{background:#ede9fe;color:#6d28d9}.b8{background:#dbeafe;color:#1d4ed8}
+.b12{background:#d1fae5;color:#065f46}.bot{background:#fef3c7;color:#b45309}
+input,select{background:#fff;border:1px solid #d1d5db;color:var(--text);font-family:'DM Sans',sans-serif;font-size:12px;padding:6px 10px;border-radius:var(--rs);width:100%;transition:border-color .15s}
+input:focus,select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(245,166,35,.1)}
+label{font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);display:block;margin-bottom:4px}
+.fg4{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.fg3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.btn{padding:6px 14px;border-radius:var(--rs);font-size:12px;cursor:pointer;font-weight:500;border:1px solid var(--border);background:#fff;color:var(--text);font-family:inherit;transition:all .15s;display:inline-flex;align-items:center;gap:5px}
+.btn:hover{background:#f9fafb;border-color:#9ca3af}
+.btn-sm{padding:3px 10px;font-size:11px}
+.btn-p{background:linear-gradient(135deg,#f5a623,#f97316);color:#000;border:none;font-weight:600}
+.btn-p:hover{opacity:.85}
+.btn-g{background:#f0fdf4;color:var(--green);border-color:#bbf7d0}
+.btn-r{background:#fef2f2;color:var(--red);border-color:#fecaca}
+.fbox{background:#f9fafb;border:1px solid var(--border);border-radius:var(--rs);padding:14px;margin:14px;margin-bottom:0;display:none}
+.fbox.open{display:block}
+.atog{display:flex;gap:3px}
+.atog button{padding:3px 8px;border-radius:6px;font-size:11px;border:1px solid #e5e7eb;background:#fff;color:#9ca3af;cursor:pointer;font-family:inherit;transition:all .15s}
+.atog .tp{border-color:#86efac;color:var(--green);background:#f0fdf4;font-weight:600}
+.atog .ta{border-color:#fca5a5;color:var(--red);background:#fef2f2;font-weight:600}
+.atog .th{border-color:#d1d5db;color:#6b7280;background:#f3f4f6;font-weight:600}
+.sbar{display:flex;gap:16px;padding:8px 14px;background:#f9fafb;border-bottom:1px solid var(--border);font-size:11px;color:var(--muted)}
+.sdot{width:6px;height:6px;border-radius:50%;display:inline-block;margin-right:4px;vertical-align:middle}
+.prog-wrap{height:5px;background:#e5e7eb;border-radius:3px;overflow:hidden;margin-top:4px}
+.prog{height:100%;border-radius:3px}
+.scrollable{overflow-x:auto}
+.adv-inp{width:72px;font-size:11px;padding:3px 6px;border-radius:5px}
+/* Late / Early styles */
+.late-tag{display:inline-flex;align-items:center;gap:3px;padding:1px 7px;border-radius:20px;font-size:10px;font-weight:600;background:#fff3cd;color:#856404;border:1px solid #ffc107}
+.early-tag{display:inline-flex;align-items:center;gap:3px;padding:1px 7px;border-radius:20px;font-size:10px;font-weight:600;background:#f8d7da;color:#842029;border:1px solid #f5c2c7}
+.ontime-tag{display:inline-flex;align-items:center;gap:3px;padding:1px 7px;border-radius:20px;font-size:10px;font-weight:600;background:#d1fae5;color:#065f46;border:1px solid #6ee7b7}
+.time-inp{width:80px;font-size:11px;padding:3px 5px;border-radius:5px;font-family:'DM Mono',monospace}
+/* Sheet import */
+.sheet-preview{background:#f9fafb;border:1px solid var(--border);border-radius:var(--rs);margin-top:10px;overflow:hidden}
+.sheet-row{display:grid;grid-template-columns:26px 1fr 90px 90px 90px;gap:0;font-size:11px;border-bottom:1px solid #f3f4f6}
+.sheet-row:last-child{border-bottom:none}
+.sheet-row>*{padding:5px 8px}
+.sheet-hdr{background:#f3f4f6;font-weight:600;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+.sheet-sec{background:#eef2ff;grid-column:1/-1;font-weight:600;font-size:10px;color:#4338ca;padding:4px 10px;letter-spacing:.5px}
+.late-row td:nth-child(4){background:#fff9c4}
+.import-stats{display:flex;gap:12px;padding:10px 14px;background:#f9fafb;border-bottom:1px solid var(--border);font-size:11px;flex-wrap:wrap}
+.ist{display:flex;align-items:center;gap:5px;font-weight:500}
+.ist .n{font-family:'DM Mono',monospace;font-size:14px}
+.dz{border:1.5px dashed #d1d5db;border-radius:var(--r);padding:22px;text-align:center;cursor:pointer;transition:all .2s;background:#fafafa}
+.dz:hover,.dz.drag{border-color:var(--accent);background:#fffbf0}
+.dz input{display:none}
+.dz p{font-size:11px;color:var(--muted);margin-top:4px}
+#overlay{position:fixed;inset:0;background:rgba(255,255,255,.95);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;gap:14px}
+.spin{width:36px;height:36px;border:3px solid #e5e7eb;border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.ov-msg{font-size:14px;font-weight:500}
+.ov-sub{font-size:11px;color:var(--muted)}
+.toast{position:fixed;bottom:20px;right:20px;padding:10px 16px;border-radius:var(--rs);font-size:12px;z-index:99999;opacity:0;transition:opacity .3s;pointer-events:none;box-shadow:0 8px 24px rgba(0,0,0,.18);max-width:340px}
+.toast.show{opacity:1}
+.t-i{background:#1f2937;color:#f9fafb}.t-ok{background:#15803d;color:#fff}.t-err{background:#dc2626;color:#fff}
+.modal-backdrop{position:fixed;inset:0;background:rgba(17,24,39,.45);display:none;align-items:center;justify-content:center;padding:20px;z-index:10000}
+.modal-card{background:#fff;border:1px solid var(--border);border-radius:16px;box-shadow:0 24px 60px rgba(0,0,0,.22);width:min(1120px,calc(100vw - 40px));max-height:88vh;overflow:auto}
+.dept-sum{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;padding:14px 18px;border-bottom:1px solid var(--border);background:#fafafa}
+.dept-sum .box{background:#fff;border:1px solid var(--border);border-radius:10px;padding:12px}
+.dept-sum .lbl{font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);margin-bottom:5px}
+.dept-sum .val{font-size:18px;font-weight:600;font-family:'DM Mono',monospace}
+.dep-group{border-top:1px solid var(--border)}
+.dep-head{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:12px 18px;background:#fffbf0;border-bottom:1px solid #fde68a}
+.dep-title{font-size:13px;font-weight:600}
+.dep-meta{display:flex;gap:14px;flex-wrap:wrap;font-size:11px;color:var(--muted)}
+.dep-table{width:100%;border-collapse:collapse}
+.dep-table th,.dep-table td{padding:8px 12px;border-bottom:1px solid #f3f4f6;font-size:12px;text-align:left;vertical-align:middle}
+.dep-table th{font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);background:#f9fafb;white-space:nowrap}
+.dep-empty{padding:22px;text-align:center;color:var(--muted);font-size:12px}
+
+.dept-tab-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.dept-tab{padding:7px 14px;border-radius:999px;border:1px solid #e5e7eb;background:#fff;color:var(--text);font-size:12px;font-weight:500;cursor:pointer;font-family:inherit;transition:all .15s}
+.dept-tab:hover{border-color:#f5a623;background:#fffbf0}
+.dept-tab.active{background:linear-gradient(135deg,#f5a623,#f97316);color:#000;border-color:transparent;font-weight:600;box-shadow:0 4px 12px rgba(245,166,35,.22)}
+.dept-mini-stats{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin-bottom:4px}
+.dept-mini-card{background:#f9fafb;border:1px solid var(--border);border-radius:10px;padding:12px 14px}
+.dept-mini-card .k{font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);margin-bottom:6px}
+.dept-mini-card .v{font-size:18px;font-weight:600;font-family:'DM Mono',monospace}
+.dept-mini-card .s{font-size:11px;color:var(--muted);margin-top:4px}
+.dept-list-note{font-size:11px;color:var(--muted)}
+@media (max-width:1200px){.dept-mini-stats{grid-template-columns:repeat(2,minmax(0,1fr));}}
+
+</style>
+</head>
+<body>
+
+<div id="overlay" style="display:none">
+  <div class="spin"></div>
+  <div class="ov-msg" id="ov-msg">Syncing…</div>
+  <div class="ov-sub" id="ov-sub"></div>
+</div>
+
+<aside class="sidebar">
+  <div class="s-logo">
+    <div class="s-icon">🏭</div>
+    <div class="s-title"><strong>Jhajjar Unit</strong><span>Payroll Manager</span></div>
+  </div>
+  <div class="s-sec">
+    <div class="s-lbl">Main</div>
+    <button class="nav active" onclick="goTo('dashboard',this)">⊞ &nbsp;Dashboard</button>
+    <button class="nav" onclick="goTo('employees',this)">👷 &nbsp;Employees</button>
+    <button class="nav" onclick="goTo('attendance',this)">📅 &nbsp;Attendance</button>
+    <button class="nav" onclick="goTo('payroll',this)">💰 &nbsp;Monthly Payroll</button>
+  </div>
+  <div class="s-sec">
+    <div class="s-lbl">Expenses</div>
+    <button class="nav" onclick="goTo('snacks',this)">☕ &nbsp;Tea / Snacks / Dinner</button>
+    <button class="nav" onclick="goTo('overtime',this)">⏱ &nbsp;OT Summary</button>
+  </div>
+  <div class="s-sec">
+    <div class="s-lbl">Tools</div>
+    <button class="nav" onclick="goTo('sheetimport',this)">📋 &nbsp;Daily Sheet Import</button>
+    <button class="nav" onclick="goTo('import',this)">📥 &nbsp;Import Excel</button>
+    <button class="nav" onclick="goTo('reports',this)">📊 &nbsp;Reports</button>
+  </div>
+  <div class="s-foot">
+    <div class="u-row">
+      <div class="u-av">JU</div>
+      <div class="u-info"><strong>Jhajjar Unit</strong><span id="s-cnt">● Connecting…</span></div>
+    </div>
+  </div>
+</aside>
+
+<main class="main">
+  <div class="topbar">
+    <h1 id="pg-title">Dashboard</h1>
+    <div class="topbar-r">
+      <div id="pill" class="pill pill-busy"><div class="pdot"></div><span id="pill-txt">Loading…</span></div>
+      <button class="btn btn-sm" onclick="boot(false)" title="Sync with Supabase">↻ Sync</button>
+      <button class="btn btn-sm" onclick="restoreLatestBackup()" title="Restore the latest safe backup">⟲ Restore Backup</button>
+      <button class="btn-add" onclick="goTo('employees',document.querySelectorAll('.nav')[1]);document.getElementById('add-form').classList.add('open')">+ Add Employee</button>
+    </div>
+  </div>
+
+  <!-- DASHBOARD -->
+  <div class="page active" id="pg-dashboard">
+    <div class="stat-row" id="d-stats"></div>
+    <div class="s3" id="d-s3"></div>
+    <div class="card">
+      <div class="card-hdr">
+        <h3>Department Daily Cost Explorer</h3>
+        <div class="cha">
+          <span class="dept-list-note">Choose date and department to see present employee cost</span>
+          <input type="date" id="d-dept-date" style="width:150px" onchange="renderDashboardDeptView()">
+          <button class="btn btn-sm" onclick="renderDashboardDeptView()">↻ Refresh</button>
+        </div>
+      </div>
+      <div style="padding:14px 18px 10px">
+        <div id="d-dept-tabs" class="dept-tab-row"></div>
+        <div id="d-dept-summary" class="dept-mini-stats"></div>
+      </div>
+      <div class="scrollable" style="padding:0 18px 18px">
+        <table class="tbl">
+          <thead><tr><th>#</th><th>Name</th><th>Position</th><th>Shift</th><th>Salary/Day</th><th>OT Hrs</th><th>OT Cost</th><th>Total Cost</th></tr></thead>
+          <tbody id="d-dept-list"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="g2">
+      <div>
+        <div class="card">
+          <div class="card-hdr"><h3>Today's Attendance &nbsp;<span id="d-date" style="font-weight:400;color:var(--muted);font-size:11px"></span></h3></div>
+          <div class="scrollable"><table class="tbl" id="d-att"></table></div>
+        </div>
+      </div>
+      <div class="rcol">
+        <div class="card"><div class="card-hdr"><h3>Selected Date Cost Breakdown <span id="d-cost-date-lbl" style="font-weight:400;color:var(--muted);font-size:11px"></span></h3><button class="btn btn-sm" onclick="openDeptCostModal()">🏷 Full Dept View</button></div><div id="d-cost" style="padding:14px 16px"></div></div>
+        <div class="card"><div class="card-hdr"><h3>Shift Distribution</h3></div><div id="d-shift" style="padding:14px 16px"></div></div>
+        <div class="card"><div class="card-hdr"><h3>Top Earners</h3></div><div id="d-earn"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- EMPLOYEES -->
+  <div class="page" id="pg-employees">
+    <div class="card">
+      <div class="card-hdr">
+        <h3>Employee Master &nbsp;<span id="emp-lbl" style="font-weight:400;color:var(--muted)"></span></h3>
+        <div class="cha">
+          <button class="btn btn-sm" onclick="document.getElementById('add-form').classList.toggle('open')">+ Add Employee</button>
+          <button class="btn btn-p btn-sm" onclick="loadCurrentEmployees()">⚡ Load CSV Employees</button>
+          <button class="btn btn-sm" onclick="boot()">↻ Refresh</button>
+        </div>
+      </div>
+      <div class="fbox" id="add-form">
+        <div class="fg4" style="grid-template-columns:repeat(5,1fr);margin-bottom:10px">
+          <div><label>Full Name</label><input id="en" placeholder="EMPLOYEE NAME"></div>
+          <div><label>Department</label><input id="ed" placeholder="Factory / Logistics / Mandeep"></div>
+          <div><label>Position</label><input id="ep" placeholder="Role / Position"></div>
+          <div><label>Monthly Salary (₹)</label><input id="es" type="number" placeholder="20000"></div>
+          <div><label>Shift</label><select id="esh"><option value="8">8 Hour Shift</option><option value="12">12 Hour Shift</option><option value="5">5 Hour Shift</option></select></div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-p btn-sm" onclick="addEmployee()">💾 Save to Sheet</button>
+          <button class="btn btn-sm" onclick="document.getElementById('add-form').classList.remove('open')">Cancel</button>
+        </div>
+      </div>
+      <div class="scrollable">
+        <table class="tbl">
+          <thead><tr><th>#</th><th>Name</th><th>Department</th><th>Position</th><th>Salary/Month</th><th>Shift</th><th>Daily Rate</th><th>Action</th></tr></thead>
+          <tbody id="emp-tbody"><tr><td colspan="7" style="text-align:center;padding:24px;color:var(--muted)">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ATTENDANCE -->
+  <div class="page" id="pg-attendance">
+    <div class="card">
+      <div class="card-hdr">
+        <h3>Daily Attendance <span style="font-weight:400;color:var(--muted);font-size:11px">(Click P = full shift hours, click A = zero hours. Then edit Worked Hrs if needed: 8h worker below 8h = Absent + worked hrs as OT, 12h worker at 8h = Present with -4h OT)</span></h3>
+        <div class="cha">
+          <input type="date" id="att-date" style="width:140px" onchange="onAttendanceDateChange()">
+          <button class="btn btn-sm" onclick="loadSelectedAttendance()">↻ Load Saved</button>
+          <button class="btn btn-g btn-sm" onclick="markAll('P')">✓ All Present</button>
+          <button class="btn btn-r btn-sm" onclick="markAll('A')">✕ All Absent</button>
+          <button class="btn btn-sm" onclick="markAll('H')">H Holiday</button>
+          <button class="btn btn-sm" onclick="copyYesterday()">⎘ Copy Yesterday</button>
+          <button class="btn btn-p btn-sm" onclick="saveAtt()">💾 Save to Sheet</button>
+        </div>
+      </div>
+      <div class="sbar">
+        <span><span class="sdot" style="background:var(--green)"></span><span id="sb-p">0 Present</span></span>
+        <span><span class="sdot" style="background:var(--red)"></span><span id="sb-a">0 Absent</span></span>
+        <span><span class="sdot" style="background:#9ca3af"></span><span id="sb-h">0 Holiday</span></span>
+        <span><span class="sdot" style="background:#d97706"></span><span id="sb-ot">0 OT Hrs</span></span>
+        <span><span class="sdot" style="background:#f59e0b"></span><span id="sb-late" style="color:#d97706;font-weight:500">0 Late</span></span>
+      </div>
+      <div class="scrollable">
+        <table class="tbl">
+          <thead><tr><th>#</th><th style="min-width:170px">Name</th><th>Shift</th><th>Status</th><th>IN Time</th><th>OUT Time</th><th>Worked Hrs</th><th>OT Hrs</th><th>⏰ Late / Early</th></tr></thead>
+          <tbody id="att-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- PAYROLL -->
+  <div class="page" id="pg-payroll">
+    <div class="stat-row" id="pay-stats"></div>
+    <div class="card">
+      <div class="card-hdr">
+        <h3>Monthly Payroll Summary <span style="font-weight:400;color:var(--muted);font-size:11px">(Salary ÷ month days · OT = (Salary ÷ month days ÷ shift hrs) × OT hrs · click Days to view dates)</span></h3>
+        <div class="cha">
+          <label style="margin:0;font-size:11px;text-transform:none;letter-spacing:0;color:var(--muted)">Month</label>
+          <input type="month" id="pay-month" style="width:140px" onchange="renderPayroll()">
+          <label style="margin:0;font-size:11px;text-transform:none;letter-spacing:0;color:var(--muted)">Days</label>
+          <input type="number" id="pay-days" value="31" style="width:55px" readonly title="Auto based on selected month">
+        </div>
+      </div>
+      <div class="scrollable">
+        <table class="tbl">
+          <thead><tr><th>#</th><th style="min-width:130px">Name</th><th>Shift</th><th>Days</th><th>OT Hrs</th><th>Salary (₹)</th><th>OT Amt (₹)</th><th>Food (Co.)</th><th>Advance (₹)</th><th>Net Pay (₹)</th><th>Total Cost (₹)</th></tr></thead>
+          <tbody id="pay-tbody"></tbody>
+          <tfoot><tr class="tfr" id="pay-tfoot"><td colspan="11" style="text-align:center;color:var(--muted);padding:10px">Select month above</td></tr></tfoot>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- SNACKS -->
+  <div class="page" id="pg-snacks">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
+      <div class="card">
+        <div class="card-hdr"><h3>Tea / Snacks / Dinner Rates</h3></div>
+        <div style="padding:16px">
+          <div class="fg3" style="margin-bottom:12px">
+            <div><label>Tea Rate (₹)</label><input id="t-m" type="number" value="10" oninput="updPP()"></div>
+            <div><label>Snacks Rate (₹)</label><input id="t-s" type="number" value="20" oninput="updPP()"></div>
+            <div><label>Dinner Rate (₹)</label><input id="t-d" type="number" value="80" oninput="updPP()"></div>
+          </div>
+          <div style="background:#f9fafb;border-radius:var(--rs);padding:10px 12px;font-size:12px;color:var(--muted);margin-bottom:12px">
+            Tea: <strong id="pp-tea" style="color:var(--accent)">₹10</strong> &nbsp;·&nbsp;
+            Snacks: <strong id="pp-snacks" style="color:var(--accent)">₹20</strong> &nbsp;·&nbsp;
+            Dinner: <strong id="pp-dinner" style="color:var(--accent)">₹80</strong>
+          </div>
+          <button class="btn btn-p btn-sm" onclick="saveSnacks()">💾 Save Rates</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-hdr"><h3>Daily Company Entry</h3></div>
+        <div style="padding:16px">
+          <div class="fg4" style="grid-template-columns:1.1fr 1fr 1fr 1fr;margin-bottom:12px">
+            <div><label>Date</label><input type="date" id="meal-date" onchange="renderSnacks()"></div>
+            <div><label>Tea Count</label><input id="meal-tea" type="number" min="0" step="1" value="0" oninput="updMealPreview()"></div>
+            <div><label>Snacks Count</label><input id="meal-snacks" type="number" min="0" step="1" value="0" oninput="updMealPreview()"></div>
+            <div><label>Dinner Count</label><input id="meal-dinner" type="number" min="0" step="1" value="0" oninput="updMealPreview()"></div>
+          </div>
+          <div style="background:#f9fafb;border-radius:var(--rs);padding:10px 12px;font-size:12px;color:var(--muted);margin-bottom:12px">
+            Daily company food cost: <strong id="meal-preview" style="color:var(--accent)">₹0</strong>
+          </div>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-p btn-sm" onclick="saveMealEntry()">💾 Save Daily Entry</button>
+            <button class="btn btn-sm" onclick="clearMealEntry()">Reset</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-hdr"><h3>Daily Food Ledger</h3><span id="snk-lbl" style="font-size:11px;color:var(--muted)"></span></div>
+      <div class="scrollable">
+        <table class="tbl">
+          <thead><tr><th>Date</th><th>Tea Count</th><th>Snacks Count</th><th>Dinner Count</th><th>Total Cost</th></tr></thead>
+          <tbody id="snk-body"></tbody>
+          <tfoot><tr class="tfr" id="snk-foot"></tr></tfoot>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- OT -->
+  <div class="page" id="pg-overtime">
+    <div class="card">
+      <div class="card-hdr">
+        <h3>Overtime Summary <span style="font-weight:400;color:var(--muted);font-size:11px">(Rate/hr auto by selected month)</span></h3>
+        <div class="cha"><input type="month" id="ot-month" style="width:140px" onchange="renderOT()"></div>
+      </div>
+      <div class="scrollable">
+        <table class="tbl">
+          <thead><tr><th>#</th><th>Name</th><th>Shift</th><th>Days Present</th><th>OT Hours</th><th>Rate/Hr (₹)</th><th>OT Amount (₹)</th></tr></thead>
+          <tbody id="ot-tbody"></tbody>
+          <tfoot><tr class="tfr" id="ot-tfoot"></tr></tfoot>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- IMPORT -->
+  <div class="page" id="pg-import">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
+      <div class="card">
+        <div class="card-hdr"><h3>📋 Import Employees from Excel</h3></div>
+        <div style="padding:14px">
+          <div class="dz" onclick="document.getElementById('ef').click()" ondragover="event.preventDefault();this.classList.add('drag')" ondragleave="this.classList.remove('drag')" ondrop="event.preventDefault();this.classList.remove('drag');doFile(event.dataTransfer.files[0],'emp')">
+            <input type="file" id="ef" accept=".xlsx,.xls" onchange="doFile(this.files[0],'emp')">
+            <div style="font-size:28px;margin-bottom:6px">📂</div>
+            <strong>Click or drag Excel file here</strong>
+            <p>Reads FACTORY LABOUR or employee_master_template sheet · Imports Name · Position · Salary · Shift</p>
+          </div>
+          <div id="emp-prev"></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-hdr"><h3>📅 Import Attendance from Excel</h3></div>
+        <div style="padding:14px">
+          <div class="dz" onclick="document.getElementById('af').click()" ondragover="event.preventDefault();this.classList.add('drag')" ondragleave="this.classList.remove('drag')" ondrop="event.preventDefault();this.classList.remove('drag');doFile(event.dataTransfer.files[0],'att')">
+            <input type="file" id="af" accept=".xlsx,.xls" onchange="doFile(this.files[0],'att')">
+            <div style="font-size:28px;margin-bottom:6px">📅</div>
+            <strong>Click or drag Excel file here</strong>
+            <p>Reads FACTORY LABOUR sheet · Imports P/A + OT hours for entire month</p>
+          </div>
+          <div id="att-prev"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- DAILY SHEET IMPORT -->
+  <div class="page" id="pg-sheetimport">
+    <div class="card" style="margin-bottom:14px">
+      <div class="card-hdr">
+        <h3>📋 Daily Attendance Sheet Import &nbsp;<span style="font-weight:400;color:var(--muted);font-size:11px">Use separate IN and OUT imports for the same date — the app merges both by employee</span></h3>
+        <div class="cha">
+          <input type="date" id="sheet-date" style="width:140px">
+          <select id="sheet-import-mode" style="width:160px" onchange="syncSheetModeUI()">
+            <option value="IN">IN Punch Import</option>
+            <option value="OUT">OUT Punch Import</option>
+            <option value="FULL">Full Day Import</option>
+            <option value="SIMPLE">Quick P/A/OT Import</option>
+          </select>
+          <button class="btn btn-sm" onclick="loadSampleSheet()">📄 Load Sample</button>
+          <button class="btn btn-p btn-sm" onclick="parseAndPreviewSheet()">⚡ Parse Sheet</button>
+        </div>
+      </div>
+      <div style="padding:14px">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+          <div>
+            <label style="margin-bottom:6px;display:block">Standard IN Time for 8h shift (late threshold)</label>
+            <input type="time" id="std-in-8" value="09:00" style="width:110px;margin-bottom:10px">
+            <label style="margin-bottom:6px;display:block">Standard IN Time for 12h shift (late threshold)</label>
+            <input type="time" id="std-in-12" value="08:00" style="width:110px;margin-bottom:10px">
+            <label style="margin-bottom:6px;display:block">Grace period (minutes)</label>
+            <input type="number" id="grace-min" value="10" min="0" max="60" style="width:80px">
+          </div>
+          <div style="background:#fffbf0;border:1px solid #f59e0b;border-radius:var(--rs);padding:12px;font-size:11px;color:#92400e">
+            <strong style="display:block;margin-bottom:6px;font-size:12px">📌 How to use</strong>
+            <p style="margin-bottom:5px">1. Choose <strong>IN Punch Import</strong> in the morning and paste the IN sheet.</p>
+            <p style="margin-bottom:5px">2. Choose <strong>OUT Punch Import</strong> later and paste the OUT sheet for the same date.</p>
+            <p style="margin-bottom:5px">3. The app matches by employee + date and merges the two punches together.</p>
+            <p style="margin-bottom:5px">4. Format: <code style="background:#fef3c7;padding:1px 4px;border-radius:3px">SECTION NAME ← section header</code></p>
+            <p style="margin-bottom:5px"><code style="background:#fef3c7;padding:1px 4px;border-radius:3px">1  AMAN (H) MAND  9.00 AM</code> or <code style="background:#fef3c7;padding:1px 4px;border-radius:3px">1  AMAN (H) MAND  5.30 PM</code></p>
+            <p><strong>Quick P/A/OT format:</strong> <code style="background:#fef3c7;padding:1px 4px;border-radius:3px">ABHISHEK P 3</code> · <code style="background:#fef3c7;padding:1px 4px;border-radius:3px">AKASH A 0</code></p>
+          </div>
+        </div>
+        <label style="margin:12px 0 6px;display:block">Paste Daily Sheet Text (copy from the physical sheet or your DEO's WhatsApp/Excel)</label>
+        <textarea id="sheet-text" style="width:100%;height:180px;font-family:'DM Mono',monospace;font-size:11px;padding:10px;border:1px solid #d1d5db;border-radius:var(--rs);resize:vertical;background:#fafafa" placeholder="RS-4
+1  AMAN (H) MAND  9.00 AM  5.30 PM
+2  AKSHAY (H) MAND  9.00 AM
+
+BOARD PLANT
+1  KD SINGH  9.00 AM
+2  ABHISHEK SINGH  9.00 AM
+..."></textarea>
+        <div style="display:flex;gap:8px;margin-top:10px">
+          <button class="btn btn-p btn-sm" onclick="parseAndPreviewSheet()">⚡ Parse & Preview</button>
+          <button class="btn btn-sm" onclick="document.getElementById('sheet-text').value=''">Clear</button>
+          <span id="sheet-mode-note" style="display:inline-flex;align-items:center;font-size:11px;color:var(--muted)"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Preview Panel -->
+    <div class="card" id="sheet-preview-card" style="display:none">
+      <div class="card-hdr">
+        <h3>Preview &nbsp;<span id="sheet-preview-title" style="font-weight:400;color:var(--muted);font-size:11px"></span></h3>
+        <div class="cha">
+          <button class="btn btn-p btn-sm" id="sheet-punch-btn" onclick="punchSheetAttendance()">💾 Save Import</button>
+          <button class="btn btn-sm" onclick="document.getElementById('sheet-preview-card').style.display='none'">✕ Close</button>
+        </div>
+      </div>
+      <div class="import-stats" id="sheet-stats"></div>
+      <!-- Late Comer Alert -->
+      <div id="late-alert" style="display:none;margin:10px 14px;padding:10px 14px;background:#fff3cd;border:1px solid #ffc107;border-radius:var(--rs);font-size:12px"></div>
+      <div class="scrollable">
+        <table class="tbl" id="sheet-preview-tbl">
+          <thead><tr><th>#</th><th>Name (Matched)</th><th>Section</th><th>IN Time</th><th>OUT Time</th><th>Worked Hrs</th><th>Status</th><th>⏰ Punctuality</th><th>Matched Employee</th></tr></thead>
+          <tbody id="sheet-preview-body"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Late Comers Report -->
+    <div class="card" id="late-report-card" style="display:none;margin-top:14px">
+      <div class="card-hdr"><h3>⚠️ Late Comers & Unmatched Entries</h3></div>
+      <div class="scrollable">
+        <table class="tbl">
+          <thead><tr><th>Name from Sheet</th><th>Section</th><th>IN Time</th><th>OUT Time</th><th>Minutes Late</th><th>Matched to</th></tr></thead>
+          <tbody id="late-report-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- REPORTS -->
+  <div class="page" id="pg-reports">
+    <div class="g2">
+      <div class="card">
+        <div class="card-hdr"><h3>Monthly P&L Summary</h3><button class="btn btn-sm" onclick="renderReports()">↻</button></div>
+        <div class="scrollable">
+          <table class="tbl">
+            <thead><tr><th>Month</th><th>Days</th><th>Staff</th><th>Salary Paid</th><th>OT Paid</th><th>Tea+Snacks</th><th>Total Cost</th></tr></thead>
+            <tbody id="rep-body"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="rcol">
+        <div class="card"><div class="card-hdr"><h3>Highest Salary</h3></div><div id="rep-sal"></div></div>
+        <div class="card"><div class="card-hdr"><h3>Most OT This Month</h3></div><div id="rep-ot"></div></div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<div id="dept-cost-modal" class="modal-backdrop" onclick="if(event.target===this)closeDeptCostModal()">
+  <div class="modal-card">
+    <div class="card-hdr" style="position:sticky;top:0;background:#fff;z-index:2">
+      <h3>Department-wise Daily Cost & Employee List</h3>
+      <div class="cha">
+        <input type="date" id="dept-cost-date" style="width:140px" onchange="renderDeptCostModal()">
+        <button class="btn btn-sm" onclick="renderDeptCostModal()">↻ Refresh</button>
+        <button class="btn btn-sm" onclick="closeDeptCostModal()">✕ Close</button>
+      </div>
+    </div>
+    <div id="dept-cost-summary" class="dept-sum"></div>
+    <div id="dept-cost-body"></div>
+  </div>
+</div>
+
+
+<div id="emp-att-modal" class="modal-backdrop" onclick="if(event.target===this)closeEmpAttendanceModal()">
+  <div class="modal-card" style="width:min(980px,calc(100vw - 40px))">
+    <div class="card-hdr" style="position:sticky;top:0;background:#fff;z-index:2">
+      <h3 id="emp-att-title">Employee Daily Attendance</h3>
+      <div class="cha">
+        <span id="emp-att-sub" style="font-size:11px;color:var(--muted)"></span>
+        <button class="btn btn-sm" onclick="closeEmpAttendanceModal()">✕ Close</button>
+      </div>
+    </div>
+    <div id="emp-att-summary" class="dept-sum"></div>
+    <div class="scrollable">
+      <table class="tbl">
+        <thead><tr><th>#</th><th>Date</th><th>Status</th><th>IN Time</th><th>OUT Time</th><th>Worked Hrs</th><th>OT Hrs</th><th>Punctuality</th></tr></thead>
+        <tbody id="emp-att-body"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+/* ══════════════════════════════════════════════════════════════
+   SUPABASE CONFIG
+   • Paste your Supabase publishable / anon key below
+   • Default table names match the SQL file included with this HTML
+══════════════════════════════════════════════════════════════ */
+const SUPABASE_URL = 'https://xrlzpywtcqxvvfnpyvke.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_4xMLF3NHdQXG7-rNphmawA_fazOsVZm';
+const TABLES = {
+  EMP:'employees',
+  ATT:'attendance',
+  ADV:'advances',
+  SNK:'snacks'
+};
+const CURRENT_EMPLOYEE_MASTER_VERSION = '2026-04-01-csv-v1';
+const EMP_MASTER_VERSION_KEY = 'jhajjar_employee_master_version';
+const CURRENT_EMPLOYEE_MASTER = [{"id": 1, "name": "ABHISHEK SINGH-(NEW)", "department": "Factory", "position": "NC-CUTTER OPERATOR", "salary": 28000, "shift": 8, "status": "ACTIVE"}, {"id": 2, "name": "AKASH KASHYAP", "department": "Factory", "position": "BOARD PLANT", "salary": 26000, "shift": 8, "status": "ACTIVE"}, {"id": 3, "name": "ANIL", "department": "Factory", "position": "BOARD PLANT-HELPER", "salary": 20000, "shift": 12, "status": "ACTIVE"}, {"id": 4, "name": "ANIL GUPTA (NEW)", "department": "Factory", "position": "SUPERVISOR", "salary": 18000, "shift": 8, "status": "ACTIVE"}, {"id": 5, "name": "ANMOL", "department": "Factory", "position": "BOARD PLANT-HELPER", "salary": 20000, "shift": 12, "status": "ACTIVE"}, {"id": 6, "name": "DOLAN-(NEW)", "department": "Factory", "position": "AUTODIE", "salary": 28000, "shift": 8, "status": "ACTIVE"}, {"id": 7, "name": "GAUTAM-NEW", "department": "Factory", "position": "SWEEPER", "salary": 10000, "shift": 5, "status": "ACTIVE"}, {"id": 8, "name": "GOLU", "department": "Factory", "position": "RS4 OPERATOR", "salary": 23000, "shift": 8, "status": "ACTIVE"}, {"id": 9, "name": "JOGINDER", "department": "Factory", "position": "PANTRY", "salary": 15000, "shift": 8, "status": "ACTIVE"}, {"id": 10, "name": "K.D. SINGH", "department": "Factory", "position": "BOARD PLANT", "salary": 36000, "shift": 8, "status": "ACTIVE"}, {"id": 11, "name": "KITTU", "department": "Factory", "position": "HELPER", "salary": 18000, "shift": 12, "status": "ACTIVE"}, {"id": 12, "name": "KRIPA SHANKER", "department": "Factory", "position": "AUTODIE", "salary": 35000, "shift": 8, "status": "ACTIVE"}, {"id": 13, "name": "KULDEEP", "department": "Factory", "position": "BOARD PLANT", "salary": 17000, "shift": 8, "status": "ACTIVE"}, {"id": 14, "name": "LALIT", "department": "Factory", "position": "BOARD PLANT-HELPER", "salary": 20000, "shift": 12, "status": "ACTIVE"}, {"id": 15, "name": "MAHESH", "department": "Factory", "position": "FORKLIFTER", "salary": 26000, "shift": 12, "status": "ACTIVE"}, {"id": 16, "name": "MONU", "department": "Factory", "position": "BOARD PLANT-HELPER", "salary": 20000, "shift": 12, "status": "ACTIVE"}, {"id": 17, "name": "PANKAJ (NEW)", "department": "Factory", "position": "SUPERVISOR", "salary": 26000, "shift": 8, "status": "ACTIVE"}, {"id": 18, "name": "PRASHTANT", "department": "Factory", "position": "BOARD PLANT-HELPER", "salary": 20000, "shift": 12, "status": "ACTIVE"}, {"id": 19, "name": "RACHIT", "department": "Factory", "position": "AUTODIE", "salary": 20000, "shift": 12, "status": "ACTIVE"}, {"id": 20, "name": "RAHUL YADAV", "department": "Factory", "position": "AUTOSTITCHING", "salary": 17000, "shift": 8, "status": "ACTIVE"}, {"id": 21, "name": "RAJIV", "department": "Factory", "position": "STITCHING OPR", "salary": 20000, "shift": 8, "status": "ACTIVE"}, {"id": 22, "name": "RAM KUMAR-NEW", "department": "Factory", "position": "AUTODIE-FEEDERMAN", "salary": 20000, "shift": 12, "status": "ACTIVE"}, {"id": 23, "name": "RAVI SINGH", "department": "Factory", "position": "Floor Incharge", "salary": 40000, "shift": 8, "status": "ACTIVE"}, {"id": 24, "name": "SAILESH", "department": "Factory", "position": "BOARD PLANT", "salary": 20000, "shift": 12, "status": "ACTIVE"}, {"id": 25, "name": "SANDEEP", "department": "Factory", "position": "SUPERVISOR", "salary": 20000, "shift": 8, "status": "ACTIVE"}, {"id": 26, "name": "SHAILENDER", "department": "Factory", "position": "STITCHING OPR", "salary": 16000, "shift": 8, "status": "ACTIVE"}, {"id": 27, "name": "SHUBHAM SINGH", "department": "Factory", "position": "BOARD PLANT", "salary": 28000, "shift": 8, "status": "ACTIVE"}, {"id": 28, "name": "SURENDER", "department": "Factory", "position": "BOARD PLANT-HELPER", "salary": 20000, "shift": 12, "status": "ACTIVE"}, {"id": 29, "name": "VIMAL SINGH", "department": "Factory", "position": "Corrugation Operator", "salary": 30000, "shift": 8, "status": "ACTIVE"}, {"id": 30, "name": "RAKESH-NEW", "department": "Factory", "position": "SWEEPER", "salary": 15000, "shift": 8, "status": "ACTIVE"}, {"id": 31, "name": "VIVEK SINGH", "department": "Factory", "position": "BOARD PLANT", "salary": 26000, "shift": 8, "status": "ACTIVE"}, {"id": 32, "name": "RADHE SHAYAM-NEW", "department": "Factory", "position": "HELPER", "salary": 20000, "shift": 12, "status": "ACTIVE"}, {"id": 33, "name": "SARVESH-NEW", "department": "Factory", "position": "OPERATOR", "salary": 17000, "shift": 8, "status": "ACTIVE"}, {"id": 34, "name": "ANIL NANDA", "department": "Factory", "position": "HELPER", "salary": 20000, "shift": 12, "status": "ACTIVE"}, {"id": 35, "name": "KAMAL SINGH", "department": "Factory", "position": "HELPER", "salary": 20000, "shift": 12, "status": "ACTIVE"}, {"id": 36, "name": "Ajit Driver", "department": "Logistics", "position": "Driver", "salary": 25000, "shift": 12, "status": "ACTIVE"}, {"id": 37, "name": "Akash Driver", "department": "Logistics", "position": "Driver", "salary": 24000, "shift": 12, "status": "ACTIVE"}, {"id": 38, "name": "Sanjay Driver", "department": "Logistics", "position": "Driver", "salary": 20000, "shift": 12, "status": "ACTIVE"}, {"id": 39, "name": "Vikram Vehicle Helper", "department": "Logistics", "position": "Driver", "salary": 15000, "shift": 12, "status": "ACTIVE"}, {"id": 40, "name": "Ishwar Driver", "department": "Logistics", "position": "Driver", "salary": 26000, "shift": 12, "status": "ACTIVE"}, {"id": 41, "name": "Deepak Vehicle Helper", "department": "Logistics", "position": "Driver", "salary": 15000, "shift": 12, "status": "ACTIVE"}, {"id": 42, "name": "Mahesh Driver", "department": "Logistics", "position": "Driver", "salary": 25000, "shift": 12, "status": "ACTIVE"}, {"id": 43, "name": "ANGAD-NEW", "department": "Factory", "position": "HELPER", "salary": 20000, "shift": 12, "status": "ACTIVE"}, {"id": 44, "name": "ANIL KUMAR", "department": "Factory", "position": "F.G.- HELPER", "salary": 17000, "shift": 12, "status": "ACTIVE"}, {"id": 45, "name": "ANIL OP", "department": "Factory", "position": "F.G.- OPR", "salary": 25000, "shift": 12, "status": "ACTIVE"}, {"id": 46, "name": "DEEPU-NEW", "department": "Factory", "position": "D.B.- HELPER", "salary": 20000, "shift": 12, "status": "ACTIVE"}, {"id": 47, "name": "SANOJ", "department": "Factory", "position": "F.G.- HELPER", "salary": 20000, "shift": 12, "status": "ACTIVE"}, {"id": 48, "name": "VINOD (NEW)", "department": "Factory", "position": "D.B.- HELPER", "salary": 20000, "shift": 12, "status": "ACTIVE"}, {"id": 49, "name": "AJAY-NEW", "department": "Mandeep", "position": "Helper - Stiching", "salary": 21000, "shift": 12, "status": "ACTIVE"}, {"id": 50, "name": "AKSHAY-NEW", "department": "Mandeep", "position": "Helper - Company", "salary": 18500, "shift": 12, "status": "ACTIVE"}, {"id": 51, "name": "AMAN-NEW", "department": "Mandeep", "position": "Helper - Rs-4", "salary": 22500, "shift": 12, "status": "ACTIVE"}, {"id": 52, "name": "AMARJEET", "department": "Mandeep", "position": "Helper - Loading", "salary": 18500, "shift": 12, "status": "ACTIVE"}, {"id": 53, "name": "ANOOP -NEW", "department": "Mandeep", "position": "Helper - Rs-4", "salary": 18500, "shift": 12, "status": "ACTIVE"}, {"id": 54, "name": "CHANDERKALA", "department": "Mandeep", "position": "Helper - Company", "salary": 15500, "shift": 12, "status": "ACTIVE"}, {"id": 55, "name": "MANDEEP", "department": "Mandeep", "position": "Wender", "salary": 45000, "shift": 12, "status": "ACTIVE"}, {"id": 56, "name": "MUSAFIR", "department": "Mandeep", "position": "Pasting Opr", "salary": 25000, "shift": 12, "status": "ACTIVE"}, {"id": 57, "name": "NEETU", "department": "Mandeep", "position": "Helper - Company", "salary": 15500, "shift": 12, "status": "ACTIVE"}, {"id": 58, "name": "PARMOD (NEW)", "department": "Mandeep", "position": "Helper - Company", "salary": 18500, "shift": 12, "status": "ACTIVE"}, {"id": 59, "name": "RADHESHYAM-NEW", "department": "Mandeep", "position": "Helper - Company", "salary": 18500, "shift": 12, "status": "ACTIVE"}, {"id": 60, "name": "RAKESH YADAV", "department": "Mandeep", "position": "Opr- Rs4", "salary": 40000, "shift": 12, "status": "ACTIVE"}, {"id": 61, "name": "RAMAYAN", "department": "Mandeep", "position": "Loading Sup", "salary": 30000, "shift": 12, "status": "ACTIVE"}, {"id": 62, "name": "RAMBRIJ", "department": "Mandeep", "position": "Opr- Pasting", "salary": 23500, "shift": 12, "status": "ACTIVE"}, {"id": 63, "name": "SAHIL-NEW", "department": "Mandeep", "position": "Helper - Company", "salary": 18500, "shift": 12, "status": "ACTIVE"}, {"id": 64, "name": "SANDEEP-NEW", "department": "Mandeep", "position": "Helper - Company", "salary": 18500, "shift": 12, "status": "ACTIVE"}, {"id": 65, "name": "SANJEEV (NEW)", "department": "Mandeep", "position": "Helper - Company", "salary": 18500, "shift": 12, "status": "ACTIVE"}, {"id": 66, "name": "SATENDER", "department": "Mandeep", "position": "Helper - Loading", "salary": 18500, "shift": 12, "status": "ACTIVE"}, {"id": 67, "name": "SHIVA KUMAR (NEW)", "department": "Mandeep", "position": "Helper - Rs-4", "salary": 18500, "shift": 12, "status": "ACTIVE"}, {"id": 68, "name": "SHIVANI-NEW", "department": "Mandeep", "position": "Helper - Company", "salary": 15500, "shift": 12, "status": "ACTIVE"}, {"id": 69, "name": "SUMAN-NEW", "department": "Mandeep", "position": "Helper - Company", "salary": 15500, "shift": 12, "status": "ACTIVE"}, {"id": 70, "name": "SURAJ SINGH", "department": "Mandeep", "position": "Opr- Rs4", "salary": 40000, "shift": 12, "status": "ACTIVE"}, {"id": 71, "name": "VIDHI CHAND", "department": "Mandeep", "position": "Helper - Company", "salary": 18500, "shift": 12, "status": "ACTIVE"}, {"id": 72, "name": "VIKRAM-NEW", "department": "Mandeep", "position": "Helper - Company", "salary": 18500, "shift": 12, "status": "ACTIVE"}, {"id": 73, "name": "VISHAL-NEW", "department": "Mandeep", "position": "Helper - Company", "salary": 18500, "shift": 12, "status": "ACTIVE"}, {"id": 74, "name": "SATENDER JAATAV-NEW", "department": "Mandeep", "position": "Helper - Company", "salary": 18500, "shift": 12, "status": "ACTIVE"}, {"id": 75, "name": "NARENDER", "department": "Mandeep", "position": "Helper - Company", "salary": 18500, "shift": 12, "status": "nan"}, {"id": 76, "name": "AMIT", "department": "Mandeep", "position": "Helper - Company", "salary": 18500, "shift": 12, "status": "nan"}];
+
+let _supabaseClient = null;
+function getSupabase(){
+  if(_supabaseClient) return _supabaseClient;
+  if(!window.supabase || typeof window.supabase.createClient !== 'function'){
+    throw new Error('Supabase library did not load. Check your internet connection or allow jsDelivr CDN in the browser.');
+  }
+  _supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
+    auth: { persistSession:false, autoRefreshToken:false, detectSessionInUrl:false }
+  });
+  return _supabaseClient;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   DATA STORE  — loaded once from Database, kept in memory
+══════════════════════════════════════════════════════════════ */
+let EMPS=[], ATTS={}, ADVS={}, SNK={tea:10,snacks:20,dinner:80};
+let EDITS={};   // unsaved attendance edits for current date
+let ACTIVE_ATT_DATE='';
+let ATT_DIRTY=false;
+const MEAL_KEY='jhajjar_meal_logs_v1';
+let MEALS={};
+let DASH_DEPT_SELECTED='Factory';
+try{ MEALS = JSON.parse(localStorage.getItem(MEAL_KEY) || '{}') || {}; }catch(_){ MEALS = {}; }
+
+/* ══════════════════════════════════════════════════════════════
+   DATABASE API — Supabase
+   • Keeps the rest of the UI unchanged by preserving gasGet()
+   • Requires public tables + RLS policies for anon browser access
+══════════════════════════════════════════════════════════════ */
+function assertSupabaseReady(){
+  if(!SUPABASE_URL || !SUPABASE_URL.includes('.supabase.co'))
+    throw new Error('Supabase URL is missing or invalid.');
+  if(!SUPABASE_KEY || SUPABASE_KEY.includes('PASTE_YOUR_SUPABASE'))
+    throw new Error('Paste your Supabase publishable / anon key at the top of this HTML file.');
+}
+function cleanRow(obj){
+  return Object.fromEntries(Object.entries(obj).filter(([,v])=>v!==undefined));
+}
+function ensureArray(val){ return Array.isArray(val) ? val : []; }
+function num(v, d=0){ const n=Number(v); return Number.isFinite(n) ? n : d; }
+function withTimeout(promise, ms, label='Request'){
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error(label + ' timed out after ' + Math.round(ms/1000) + 's. Check internet, Supabase URL, or browser/network blocking.')), ms))
+  ]);
+}
+async function sb(q, label){
+  const { data, error } = await withTimeout(q, 12000, label);
+  if(error) throw new Error(label + ': ' + error.message);
+  return data;
+}
+function empRow(r){
+  return {
+    id: num(r.id),
+    name: String(r.name || '').trim(),
+    department: String(r.department || '').trim(),
+    position: String(r.position || '').trim(),
+    salary: num(r.salary),
+    shift: num(r.shift, 8),
+    status: String(r.status || 'ACTIVE').trim() || 'ACTIVE'
+  };
+}
+function attRow(r){
+  return cleanRow({
+    id: r.id !== undefined && r.id !== null && r.id !== '' ? num(r.id) : undefined,
+    employee_id: num(r.employee_id),
+    employee_name: String(r.employee_name || '').trim(),
+    date: String(r.date || '').trim(),
+    status: String(r.status || 'A').trim().toUpperCase(),
+    in_time: String(r.in_time || '').trim(),
+    out_time: String(r.out_time || '').trim(),
+    total_hours: num(r.total_hours),
+    ot_hours: num(r.ot_hours)
+  });
+}
+function advRow(r){
+  return cleanRow({
+    id: r.id !== undefined && r.id !== null && r.id !== '' ? num(r.id) : undefined,
+    employee_id: num(r.employee_id),
+    employee_name: String(r.employee_name || '').trim(),
+    month: String(r.month || '').trim(),
+    amount: num(r.amount)
+  });
+}
+function snackRow(r){
+  return {
+    id: num(r.id || 1, 1),
+    morning: num(r.morning, 10),   // Tea rate
+    evening: num(r.evening, 80),   // Dinner rate
+    snacks: num(r.snacks, 20)      // Snacks rate
+  };
+}
+async function getAllFromSupabase(){
+  const [employees, attendance, advances, snacks] = await Promise.all([
+    sb(getSupabase().from(TABLES.EMP).select('*').order('id', {ascending:true}), 'Load employees'),
+    sb(getSupabase().from(TABLES.ATT).select('*').order('date', {ascending:true}).order('employee_id', {ascending:true}), 'Load attendance'),
+    sb(getSupabase().from(TABLES.ADV).select('*').order('month', {ascending:true}).order('employee_id', {ascending:true}), 'Load advances'),
+    sb(getSupabase().from(TABLES.SNK).select('*').order('id', {ascending:true}).limit(1), 'Load snacks')
+  ]);
+  return {
+    employees: ensureArray(employees),
+    attendance: ensureArray(attendance),
+    advances: ensureArray(advances),
+    snacks: (ensureArray(snacks)[0]) || {morning:10, evening:80, snacks:20}
+  };
+}
+async function gasGet(params) {
+  // For getAll, try Supabase — if it fails, return null (boot handles fallback)
+  if(params.action === 'getAll'){
+    try{ assertSupabaseReady(); }catch(e){ throw e; }
+    return await getAllFromSupabase();
+  }
+  // For writes: try Supabase, but don't block the UI if it fails
+  try{
+    assertSupabaseReady();
+  }catch(e){
+    // No Supabase config — just return ok (data already updated in memory)
+    return { ok:true, offline:true };
+  }
+  const action = params.action;
+  try{
+  switch(action){
+    case 'getAll':
+      return await getAllFromSupabase();
+
+    case 'addEmployee':
+      await sb(
+        getSupabase().from(TABLES.EMP).upsert([empRow(params)], { onConflict:'id' }),
+        'Add employee'
+      );
+      return { ok:true };
+
+    case 'deleteEmployee':
+      await sb(
+        getSupabase().from(TABLES.EMP).update({ status:'INACTIVE' }).eq('id', num(params.id)),
+        'Delete employee'
+      );
+      return { ok:true };
+
+    case 'saveAllEmployees': {
+      const rows = ensureArray(params.rows).map(empRow);
+      if(rows.length){
+        await sb(
+          getSupabase().from(TABLES.EMP).upsert(rows, { onConflict:'id' }),
+          'Save employees'
+        );
+      }
+      return { saved: rows.length };
+    }
+
+    case 'saveAttendance': {
+      const rows = ensureArray(params.rows).map(attRow);
+      if(rows.length){
+        await sb(
+          getSupabase().from(TABLES.ATT).upsert(rows, { onConflict:'employee_id,date' }),
+          'Save attendance'
+        );
+      }
+      return { saved: rows.length };
+    }
+
+    case 'importAttendance': {
+      const rows = ensureArray(params.rows).map(attRow);
+      if(rows.length){
+        await sb(
+          getSupabase().from(TABLES.ATT).upsert(rows, { onConflict:'employee_id,date' }),
+          'Import attendance'
+        );
+      }
+      return { imported: rows.length };
+    }
+
+    case 'saveAdvance': {
+      const row = advRow(params);
+      await sb(
+        getSupabase().from(TABLES.ADV).upsert([row], { onConflict:'employee_id,month' }),
+        'Save advance'
+      );
+      return { saved:true };
+    }
+
+    case 'saveSnacks': {
+      const row = snackRow({ id:1, morning:params.morning, evening:params.evening, snacks:params.snacks });
+      await sb(
+        getSupabase().from(TABLES.SNK).upsert([row], { onConflict:'id' }),
+        'Save snacks'
+      );
+      return { saved:true };
+    }
+
+    default:
+      throw new Error('Unknown action: ' + action);
+  }
+  }catch(writeErr){
+    // Supabase write failed — data is safe in memory + localStorage cache
+    console.warn('Supabase write failed (offline mode):', writeErr.message);
+    setPill('err','Offline – saved locally');
+    throw writeErr; // re-throw so callers can show toast if needed
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   LOCAL CACHE — so app works offline / without Supabase
+══════════════════════════════════════════════════════════════ */
+const LC_KEY = 'jhajjar_local_cache_v2';
+const LEGACY_CACHE_KEYS = ['jhajjar_local_cache_v1','jhajjar_local_cache'];
+const LC_BACKUP_LATEST_KEY = 'jhajjar_local_cache_backup_latest_v1';
+const LC_BACKUP_ARCHIVE_KEY = 'jhajjar_local_cache_backup_archive_v1';
+const MAX_LOCAL_BACKUPS = 8;
+
+function buildCacheSnapshot(){
+  return {
+    employees: EMPS.map(e=>({id:e.id,name:e.name,department:e.dept,position:e.pos,salary:e.salary,shift:e.shift,status:'ACTIVE'})),
+    attendance: Object.entries(ATTS).flatMap(([date,dayA])=>
+      Object.entries(dayA).map(([eid,r])=>({employee_id:+eid,date,...r,ot_hours:r.ot,total_hours:r.hrs}))),
+    advances: Object.entries(ADVS).flatMap(([mo,mo_])=>
+      Object.entries(mo_).map(([eid,amt])=>({employee_id:+eid,month:mo,amount:amt}))),
+    snacks: {morning:SNK.tea,snacks:SNK.snacks,evening:SNK.dinner}
+  };
+}
+function cacheCounts(cache){
+  const c=cache||{};
+  return {
+    employees: ensureArray(c.employees).length,
+    attendance: ensureArray(c.attendance).length,
+    advances: ensureArray(c.advances).length
+  };
+}
+function totalDataWeight(cache){
+  const c=cacheCounts(cache);
+  return c.employees + c.attendance + c.advances;
+}
+function parseJsonSafe(raw){
+  try{return raw ? JSON.parse(raw) : null;}catch(_){return null;}
+}
+function stampCache(cache, meta={}){
+  const stamped = JSON.parse(JSON.stringify(cache||{}));
+  stamped._meta = {
+    saved_at: new Date().toISOString(),
+    reason: meta.reason || 'save',
+    counts: cacheCounts(stamped)
+  };
+  return stamped;
+}
+function saveBackupSnapshot(cache, reason='backup'){
+  const base = cache || buildCacheSnapshot();
+  const stamped = stampCache(base, {reason});
+  try{
+    localStorage.setItem(LC_BACKUP_LATEST_KEY, JSON.stringify(stamped));
+    const archive = parseJsonSafe(localStorage.getItem(LC_BACKUP_ARCHIVE_KEY)) || [];
+    archive.unshift(stamped);
+    localStorage.setItem(LC_BACKUP_ARCHIVE_KEY, JSON.stringify(archive.slice(0, MAX_LOCAL_BACKUPS)));
+  }catch(_){ }
+  return stamped;
+}
+function loadBackupSnapshot(){
+  return parseJsonSafe(localStorage.getItem(LC_BACKUP_LATEST_KEY));
+}
+function loadLocalCachePrimary(){
+  return parseJsonSafe(localStorage.getItem(LC_KEY));
+}
+function loadLegacyLocalCache(){
+  for(const key of LEGACY_CACHE_KEYS){
+    const hit = parseJsonSafe(localStorage.getItem(key));
+    if(hit) return hit;
+  }
+  return null;
+}
+function shouldProtectExistingCache(nextCache, existingCache){
+  if(!existingCache || !nextCache) return false;
+  const next = cacheCounts(nextCache), prev = cacheCounts(existingCache);
+  const nextWeight = next.employees + next.attendance + next.advances;
+  const prevWeight = prev.employees + prev.attendance + prev.advances;
+  const attendanceDroppedHard = prev.attendance >= 15 && next.attendance < Math.max(5, Math.floor(prev.attendance * 0.4));
+  const employeesDroppedHard = prev.employees >= 10 && next.employees < Math.max(5, Math.floor(prev.employees * 0.6));
+  return prevWeight > nextWeight && (attendanceDroppedHard || employeesDroppedHard);
+}
+function mergeByKey(rowsA, rowsB, keyFn){
+  const map = new Map();
+  ensureArray(rowsA).forEach(row=>{ const k=keyFn(row); if(k) map.set(k, row); });
+  ensureArray(rowsB).forEach(row=>{ const k=keyFn(row); if(k) map.set(k, {...map.get(k), ...row}); });
+  return [...map.values()];
+}
+function mergeDatasets(baseData, incomingData){
+  const base = baseData || {};
+  const incoming = incomingData || {};
+  return {
+    employees: mergeByKey(base.employees, incoming.employees, r=>String(num(r.id)||''))
+      .sort((a,b)=>(+a.id||0)-(+b.id||0)),
+    attendance: mergeByKey(base.attendance, incoming.attendance, r=>`${num(r.employee_id)}|${String(r.date||'').trim()}`)
+      .sort((a,b)=> String(a.date||'').localeCompare(String(b.date||'')) || ((+a.employee_id||0)-(+b.employee_id||0))),
+    advances: mergeByKey(base.advances, incoming.advances, r=>`${num(r.employee_id)}|${String(r.month||'').trim()}`)
+      .sort((a,b)=> String(a.month||'').localeCompare(String(b.month||'')) || ((+a.employee_id||0)-(+b.employee_id||0))),
+    snacks: incoming.snacks || base.snacks || {morning:10,snacks:20,evening:80}
+  };
+}
+function loadBestLocalCache(){
+  const primary = loadLocalCachePrimary();
+  const legacy = loadLegacyLocalCache();
+  const backup = loadBackupSnapshot();
+  const candidates = [backup, legacy, primary].filter(Boolean);
+  if(!candidates.length) return null;
+  return candidates.reduce((acc, item)=>mergeDatasets(acc, item), {employees:[], attendance:[], advances:[], snacks:{morning:10,snacks:20,evening:80}});
+}
+function saveLocalCache(opts={}){
+  try{
+    const cache = buildCacheSnapshot();
+    const currentPrimary = loadLocalCachePrimary();
+    if(opts.backupCurrent && currentPrimary) saveBackupSnapshot(currentPrimary, opts.backupReason || 'pre-write');
+    if(currentPrimary && !opts.allowSmallerOverwrite && shouldProtectExistingCache(cache, currentPrimary)){
+      saveBackupSnapshot(currentPrimary, 'protected-richer-cache');
+      console.warn('Refused to overwrite richer local cache with smaller dataset');
+      return false;
+    }
+    const stamped = stampCache(cache, {reason: opts.reason || 'save'});
+    localStorage.setItem(LC_KEY, JSON.stringify(stamped));
+    return true;
+  }catch(_){ return false; }
+}
+function getBackupArchive(){
+  return parseJsonSafe(localStorage.getItem(LC_BACKUP_ARCHIVE_KEY)) || [];
+}
+async function syncDatasetToCloud(data){
+  const dataset = data || buildCacheSnapshot();
+  const empRows = ensureArray(dataset.employees);
+  const attRows = ensureArray(dataset.attendance);
+  const advRows = ensureArray(dataset.advances);
+  if(empRows.length) await gasGet({action:'saveAllEmployees', rows:empRows});
+  for(let i=0;i<attRows.length;i+=400){
+    await gasGet({action:'saveAttendance', rows:attRows.slice(i,i+400)});
+  }
+  for(const row of advRows){
+    await gasGet({action:'saveAdvance', employee_id:row.employee_id, employee_name:row.employee_name || '', month:row.month, amount:row.amount});
+  }
+  if(dataset.snacks){
+    await gasGet({action:'saveSnacks', morning:dataset.snacks.morning, snacks:dataset.snacks.snacks, evening:dataset.snacks.evening});
+  }
+}
+async function restoreLatestBackup(){
+  const archive = getBackupArchive();
+  const backup = archive[0] || loadBackupSnapshot();
+  if(!backup){
+    toast('No local backup found on this browser/device','err');
+    return;
+  }
+  const counts = cacheCounts(backup);
+  const msg = `Restore latest backup?
+Employees: ${counts.employees}
+Attendance rows: ${counts.attendance}
+Advances: ${counts.advances}`;
+  if(!confirm(msg)) return;
+  parseAll(backup);
+  saveLocalCache({reason:'manual-restore', allowSmallerOverwrite:true});
+  updateCounts(); renderDashboard(); renderEmpTable(); renderAtt(); renderPayroll(); renderOT(); renderReports();
+  try{
+    setPill('busy','Restoring backup…');
+    await syncDatasetToCloud(backup);
+    setPill('ok','Backup restored ✓');
+    toast('✓ Backup restored to local and cloud','ok');
+  }catch(e){
+    setPill('err','Restore saved locally');
+    toast('Backup restored locally. Cloud sync failed: '+e.message,'err');
+  }
+}
+/* ══════════════════════════════════════════════════════════════
+   BOOT — offline-first: load from cache instantly, sync in bg
+══════════════════════════════════════════════════════════════ */
+async function boot(silent=false) {
+  const seedNeedsApply = (()=>{ try{return localStorage.getItem(EMP_MASTER_VERSION_KEY)!==CURRENT_EMPLOYEE_MASTER_VERSION;}catch(_){return true;} })();
+
+  // Step 1: load the best local copy first (primary / legacy / backup)
+  const localBest = loadBestLocalCache();
+  if(localBest){
+    parseAll(localBest);
+    updateCounts(); renderDashboard();
+    setPill('busy','Syncing…');
+    if(!silent) toast('📦 Loaded local data — checking cloud history…');
+  } else {
+    parseAll({employees: CURRENT_EMPLOYEE_MASTER, attendance:[], advances:[], snacks:{morning:10,snacks:20,evening:80}});
+    updateCounts(); renderDashboard();
+    setPill('busy', seedNeedsApply ? 'Updating employee master…' : 'Connecting…');
+  }
+
+  // Step 2: merge cloud + local so partial loads never wipe history
+  try {
+    const remoteData = await gasGet({action:'getAll'});
+    let merged = mergeDatasets(localBest || {}, remoteData || {});
+
+    if(seedNeedsApply){
+      const existingById = new Map((merged.employees||[]).map(r=>[+r.id, {...r}]));
+      CURRENT_EMPLOYEE_MASTER.forEach(r=>{
+        const id = +r.id;
+        existingById.set(id, {...existingById.get(id), ...r, id, status:'ACTIVE'});
+      });
+      merged.employees = [...existingById.values()].sort((a,b)=>(+a.id||0)-(+b.id||0));
+      try{
+        await gasGet({action:'saveAllEmployees', rows:CURRENT_EMPLOYEE_MASTER});
+        localStorage.setItem(EMP_MASTER_VERSION_KEY, CURRENT_EMPLOYEE_MASTER_VERSION);
+        if(!silent) toast('✓ Employee list merged from CSV','ok');
+      }catch(seedErr){
+        console.warn('Employee master sync warning:', seedErr.message);
+        if(!silent) toast('⚠ Employee CSV merged locally. Cloud employee sync needs table compatibility.','err');
+      }
+    }
+
+    parseAll(merged);
+    saveLocalCache({reason:'boot-merge', allowSmallerOverwrite:false});
+    setPill('ok','Synced ✓');
+    updateCounts(); renderDashboard();
+    if(!silent) toast('✓ History merged safely','ok');
+  } catch(e) {
+    setPill('err', localBest ? 'Offline (local copy)' : 'No connection');
+    if(!silent) toast('⚠ Supabase: '+e.message+' — using local copy','err');
+  }
+}
+
+
+
+function parseAll(data) {
+  // Employees
+  EMPS = (data.employees||[])
+    .filter(r=>(r.status||'ACTIVE')==='ACTIVE' && r.name)
+    .map(r=>({id:+r.id, name:String(r.name).trim(), dept:String(r.department||'').trim(), pos:String(r.position||'').trim(),
+              salary:+r.salary||0, shift:+r.shift||8}));
+
+  // Attendance — index by date → empId
+  ATTS = {};
+  (data.attendance||[]).forEach(r=>{
+    const d=String(r.date||'').trim(); if(!d) return;
+    if(!ATTS[d]) ATTS[d]={};
+    ATTS[d][+r.employee_id]={
+      status:String(r.status||'A').toUpperCase(),
+      in_time:String(r.in_time||'').trim(), out_time:String(r.out_time||'').trim(),
+      ot:+r.ot_hours||0, hrs:+r.total_hours||0
+    };
+  });
+
+  // Advances — index by month → empId
+  ADVS = {};
+  (data.advances||[]).forEach(r=>{
+    const mo=String(r.month||'').trim(); if(!mo) return;
+    if(!ADVS[mo]) ADVS[mo]={};
+    ADVS[mo][+r.employee_id]=+r.amount||0;
+  });
+
+  // Food rates
+  const s=data.snacks||{};
+  const rawDinner=+s.evening;
+  SNK={tea:+s.morning||10, snacks:+s.snacks||20, dinner:(rawDinner && rawDinner!==5)?rawDinner:80};
+  document.getElementById('t-m').value=SNK.tea;
+  document.getElementById('t-s').value=SNK.snacks;
+  const dinnerEl=document.getElementById('t-d'); if(dinnerEl) dinnerEl.value=SNK.dinner;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   HELPERS
+══════════════════════════════════════════════════════════════ */
+const todayS = ()=>new Date().toISOString().slice(0,10);
+const fmt    = n =>Math.round(n).toLocaleString('en-IN');
+const fmtD   = s =>new Date(s+'T00:00').toLocaleDateString('en-IN',{weekday:'short',day:'numeric',month:'short',year:'numeric'});
+const calcH  = (i,o)=>{const[ih,im]=i.split(':').map(Number),[oh,om]=o.split(':').map(Number);let m=(oh*60+om)-(ih*60+im);if(m<0)m+=1440;return Math.round(m*100/60)/100;};
+const pp     = ()=>num(SNK.tea)+num(SNK.snacks)+num(SNK.dinner);
+const maxId  = ()=>EMPS.length?Math.max(...EMPS.map(e=>e.id))+1:1;
+const da     = d=>ATTS[d]||{};
+const daInMo = m=>Object.entries(ATTS).filter(([d])=>d.startsWith(m));
+const daysInMonth = mo => {
+  if(!mo || !/^\d{4}-\d{2}$/.test(mo)) return 30;
+  const [y,m] = mo.split('-').map(Number);
+  return new Date(y, m, 0).getDate();
+};
+const salaryPerDay = (salary, mo) => salary / daysInMonth(mo);
+const otRatePerHour = (salary, mo, shiftHours) => salaryPerDay(salary, mo) / (shiftHours || 1);
+const normalizeDepartment = dept => String(dept || '').trim() || 'Unassigned';
+function dailyEmployeeCost(emp, date=todayS()){
+  const mo = String(date||todayS()).slice(0,7);
+  const rec = (ATTS[date]||{})[emp.id] || {};
+  const status = rec.status || 'A';
+  const salaryCost = status==='P' ? salaryPerDay(emp.salary, mo) : 0;
+  const otHours = status!=='H' ? num(rec.ot) : 0;
+  const otCost = status!=='H' ? otRatePerHour(emp.salary, mo, emp.shift) * otHours : 0;
+  return {status, otHours, salaryCost, otCost, totalCost:salaryCost+otCost};
+}
+
+function updateCounts() {
+  const n=EMPS.length;
+  document.getElementById('s-cnt').textContent='● '+n+' Employees';
+  document.getElementById('emp-lbl').textContent=n+' staff';
+}
+function setOv(msg){ /* overlay disabled - non-blocking mode */ }
+function hideOv(){ document.getElementById('overlay').style.display='none'; }
+function setPill(state,txt){
+  const el=document.getElementById('pill');
+  el.className='pill '+{ok:'pill-ok',err:'pill-err',busy:'pill-busy'}[state];
+  document.getElementById('pill-txt').textContent=txt;
+}
+function toast(msg,type='i'){
+  const t=document.getElementById('toast');
+  t.textContent=msg;t.className='toast show t-'+type;
+  setTimeout(()=>t.className='toast',4000);
+}
+function updPP(){
+  const tea=+document.getElementById('t-m').value||0;
+  const snacks=+document.getElementById('t-s').value||0;
+  const dinner=+document.getElementById('t-d').value||0;
+  const teaEl=document.getElementById('pp-tea'); if(teaEl) teaEl.textContent='₹'+tea;
+  const snackEl=document.getElementById('pp-snacks'); if(snackEl) snackEl.textContent='₹'+snacks;
+  const dinnerEl=document.getElementById('pp-dinner'); if(dinnerEl) dinnerEl.textContent='₹'+dinner;
+  updMealPreview();
+}
+function mealEntry(date){
+  const m=MEALS[date]||{};
+  return {tea:num(m.tea), snacks:num(m.snacks), dinner:num(m.dinner)};
+}
+function mealCost(entry){
+  const e=entry||{};
+  return num(e.tea)*num(SNK.tea) + num(e.snacks)*num(SNK.snacks) + num(e.dinner)*num(SNK.dinner);
+}
+function saveMealStore(){
+  try{ localStorage.setItem(MEAL_KEY, JSON.stringify(MEALS)); }catch(_){}
+}
+function mealTotalForDate(date){ return mealCost(mealEntry(date)); }
+function mealTotalForMonth(month){
+  return Object.entries(MEALS).reduce((s,[d,e])=>s+(d.startsWith(month)?mealCost(e):0),0);
+}
+function updMealPreview(){
+  const el=document.getElementById('meal-preview');
+  if(!el) return;
+  const entry={
+    tea:+(document.getElementById('meal-tea')?.value||0),
+    snacks:+(document.getElementById('meal-snacks')?.value||0),
+    dinner:+(document.getElementById('meal-dinner')?.value||0)
+  };
+  el.textContent='₹'+fmt(mealCost(entry));
+}
+function clearMealEntry(){
+  const date=document.getElementById('meal-date').value || todayS();
+  document.getElementById('meal-tea').value=0;
+  document.getElementById('meal-snacks').value=0;
+  document.getElementById('meal-dinner').value=0;
+  updMealPreview();
+}
+async function saveMealEntry(){
+  const date=document.getElementById('meal-date').value || todayS();
+  MEALS[date]={
+    tea:+(document.getElementById('meal-tea').value||0),
+    snacks:+(document.getElementById('meal-snacks').value||0),
+    dinner:+(document.getElementById('meal-dinner').value||0)
+  };
+  saveMealStore();
+  saveLocalCache({reason:'meal-entry-save', backupCurrent:true, backupReason:'before-meal-save'});
+  renderSnacks();
+  renderDashboard();
+  renderPayroll();
+  renderReports();
+  toast('✓ Daily food entry saved for '+date,'ok');
+}
+
+/* ══════════════════════════════════════════════════════════════
+   NAVIGATION
+══════════════════════════════════════════════════════════════ */
+const TITLES={dashboard:'Dashboard',employees:'Employees',attendance:'Attendance',
+  payroll:'Monthly Payroll',snacks:'Tea / Snacks / Dinner',overtime:'OT Summary',import:'Import Excel',sheetimport:'Daily Sheet Import',reports:'Reports'};
+function goTo(id,btn){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nav').forEach(n=>n.classList.remove('active'));
+  document.getElementById('pg-'+id).classList.add('active');
+  if(btn) btn.classList.add('active');
+  document.getElementById('pg-title').textContent=TITLES[id]||id;
+  ({dashboard:renderDashboard,employees:renderEmpTable,attendance:renderAtt,
+    payroll:renderPayroll,snacks:renderSnacks,overtime:renderOT,reports:renderReports,
+    sheetimport:initSheetImport}[id]||function(){})();
+}
+
+/* ══════════════════════════════════════════════════════════════
+   DASHBOARD
+══════════════════════════════════════════════════════════════ */
+function renderDashboard(){
+  const td=todayS(),dayAtt=da(td),foodD=mealTotalForDate(td);
+  document.getElementById('d-date').textContent=fmtD(td);
+  const dashDateEl=document.getElementById('d-dept-date');
+  if(dashDateEl && !dashDateEl.value) dashDateEl.value=td;
+  const selectedDate=dashDateEl?.value || td;
+  const selectedAtt=da(selectedDate), selectedFood=mealTotalForDate(selectedDate);
+  let pre=0,abs=0,hol=0,ot=0;
+  EMPS.forEach(e=>{
+    const r=dayAtt[e.id]||{};
+    if(r.status==='P') pre++;
+    else if(r.status==='H') hol++;
+    else abs++;
+    if(r.status!=='H') ot+=num(r.ot);
+  });
+  const totSal=EMPS.reduce((s,e)=>s+e.salary,0), currMo = td.slice(0,7);
+  const salD=EMPS.reduce((s,e)=>{
+    const r=dayAtt[e.id];
+    return s+(r?.status==='P'?salaryPerDay(e.salary, currMo):0);
+  },0);
+  const otD =EMPS.reduce((s,e)=>{
+    const r=dayAtt[e.id];
+    return s+((r && r.status!=='H') ? otRatePerHour(e.salary, currMo, e.shift)*num(r.ot) : 0);
+  },0);
+  const selectedMonth = selectedDate.slice(0,7);
+  let selectedPresent=0, selectedAbsent=0, selectedHoliday=0;
+  const salSelected=EMPS.reduce((s,e)=>{
+    const r=selectedAtt[e.id]||{};
+    if(r.status==='P') selectedPresent++;
+    else if(r.status==='H') selectedHoliday++;
+    else selectedAbsent++;
+    return s+(r.status==='P'?salaryPerDay(e.salary, selectedMonth):0);
+  },0);
+  const otSelected=EMPS.reduce((s,e)=>{
+    const r=selectedAtt[e.id];
+    return s+((r && r.status!=='H') ? otRatePerHour(e.salary, selectedMonth, e.shift)*num(r.ot) : 0);
+  },0);
+
+  document.getElementById('d-stats').innerHTML=`
+    <div class="stat-card"><div class="stat-label">Total Employees</div><div class="stat-val sv-b">${EMPS.length}</div></div>
+    <div class="stat-card"><div class="stat-label">Monthly Payroll</div><div class="stat-val" style="font-size:17px">₹${fmt(totSal)}</div></div>
+    <div class="stat-card"><div class="stat-label">Today Salary Cost</div><div class="stat-val sv-g" style="font-size:17px">₹${fmt(salD)}</div></div>
+    <div class="stat-card"><div class="stat-label">Today Total Cost</div><div class="stat-val sv-a" style="font-size:17px">₹${fmt(salD+otD+foodD)}</div></div>`;
+  document.getElementById('d-s3').innerHTML=`
+    <div class="s3c"><div class="s3i ig">✅</div><div><div class="s3n">${pre}</div><div class="s3l">Present Today</div></div></div>
+    <div class="s3c"><div class="s3i ir">❌</div><div><div class="s3n">${abs}</div><div class="s3l">Absent Today</div></div></div>
+    <div class="s3c"><div class="s3i ib">📅</div><div><div class="s3n">${hol}</div><div class="s3l">On Holiday</div></div></div>`;
+  let rows='<thead><tr><th>Name</th><th>Shift</th><th>Status</th><th>OT</th></tr></thead><tbody>';
+  EMPS.forEach(e=>{
+    const r=dayAtt[e.id]||{},st=r.status||'A',otVal=num(r.ot);
+    rows+=`<tr><td style="font-weight:500">${e.name}</td><td><span class="badge b${e.shift}">${e.shift}h</span></td>
+      <td><span class="badge ${st==='P'?'bp':st==='H'?'bh':'ba'}">${st==='P'?'Present':st==='H'?'Holiday':'Absent'}</span></td>
+      <td>${otVal!==0?`<span class="badge bot">${otVal>0?'+':''}${otVal.toFixed(1)}h</span>`:'—'}</td></tr>`;
+  });
+  document.getElementById('d-att').innerHTML=rows+'</tbody>';
+  const mealEntrySelected=mealEntry(selectedDate);
+  document.getElementById('d-cost-date-lbl').textContent='· '+fmtD(selectedDate);
+  document.getElementById('d-cost').innerHTML=`
+    <div style="display:grid;grid-template-columns:1fr auto;gap:7px 12px;font-size:12px;align-items:center">
+      <span style="color:var(--muted)">Salary (${selectedPresent} present)</span><span class="mono" style="font-weight:500">₹${fmt(salSelected)}</span>
+      <span style="color:var(--muted)">OT Cost</span><span class="mono ca">₹${fmt(otSelected)}</span>
+      <span style="color:var(--muted)">Food Cost</span><span class="mono cg">₹${fmt(selectedFood)}</span>
+      <span style="color:var(--muted)">Status Mix</span><span class="mono cm">P ${selectedPresent} · A ${selectedAbsent} · H ${selectedHoliday}</span>
+      <span style="color:var(--muted)">Food counts</span><span class="mono cm">Tea ${num(mealEntrySelected.tea)} · Snacks ${num(mealEntrySelected.snacks)} · Dinner ${num(mealEntrySelected.dinner)}</span>
+      <div style="grid-column:1/-1;border-top:1px solid var(--border);margin:3px 0"></div>
+      <span style="font-weight:500">Total For Date</span>
+      <span class="mono" style="font-weight:600;font-size:15px;color:var(--accent)">₹${fmt(salSelected+otSelected+selectedFood)}</span>
+    </div>`;
+  const shiftGroups=[...EMPS.reduce((m,e)=>{const k=String(e.shift||0);m.set(k,(m.get(k)||0)+1);return m;},new Map()).entries()]
+    .sort((a,b)=>Number(a[0])-Number(b[0]));
+  const n=Math.max(EMPS.length,1);
+  const shiftGradients=['linear-gradient(90deg,var(--purple),var(--blue))','linear-gradient(90deg,var(--blue),var(--teal))','linear-gradient(90deg,var(--green),var(--teal))','linear-gradient(90deg,#f59e0b,#f97316)'];
+  document.getElementById('d-shift').innerHTML=shiftGroups.map(([hrs,count],idx)=>`
+    <div style="margin-bottom:${idx===shiftGroups.length-1?0:10}px">
+      <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px"><span style="color:var(--muted)">${hrs}-Hour</span><span style="font-weight:500">${count}</span></div>
+      <div class="prog-wrap"><div class="prog" style="width:${Math.round(count/n*100)}%;background:${shiftGradients[idx%shiftGradients.length]}"></div></div>
+    </div>`).join('');
+  document.getElementById('d-earn').innerHTML=[...EMPS].sort((a,b)=>b.salary-a.salary).slice(0,5)
+    .map(e=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 14px;border-bottom:1px solid #f3f4f6">
+      <span style="font-size:12px">${e.name}</span><span class="mono ca" style="font-size:12px;font-weight:500">₹${fmt(e.salary)}</span></div>`).join('');
+  renderDashboardDeptView();
+  if(document.getElementById('dept-cost-modal')?.style.display==='flex') renderDeptCostModal();
+}
+
+function renderDashboardDeptView(forceDept=''){
+  const dateEl=document.getElementById('d-dept-date');
+  if(dateEl && !dateEl.value) dateEl.value=todayS();
+  const date=dateEl?.value || todayS();
+  const data=getDepartmentCostData(date);
+  const preferred=['Factory','Mandeep','Logistics'];
+  const found=data.map(g=>g.department);
+  const departments=[...preferred.filter(d=>found.includes(d)),...found.filter(d=>!preferred.includes(d))];
+  if(forceDept) DASH_DEPT_SELECTED=forceDept;
+  if(!departments.includes(DASH_DEPT_SELECTED)) DASH_DEPT_SELECTED=departments[0] || 'Factory';
+  document.getElementById('d-dept-tabs').innerHTML=departments.map(dep=>`<button class="dept-tab ${dep===DASH_DEPT_SELECTED?'active':''}" onclick="renderDashboardDeptView('${dep.replace(/'/g,"\'")}')">${dep}</button>`).join('');
+  const active=data.find(g=>g.department===DASH_DEPT_SELECTED) || {department:DASH_DEPT_SELECTED,employees:[],salary:0,ot:0,total:0,present:0,absent:0,holiday:0};
+  const presentEmployees=active.employees.filter(e=>e.status==='P').sort((a,b)=>b.totalCost-a.totalCost || a.name.localeCompare(b.name));
+  document.getElementById('d-dept-summary').innerHTML=`
+    <div class="dept-mini-card"><div class="k">Department</div><div class="v" style="font-size:16px">${active.department}</div><div class="s">Date ${fmtD(date)}</div></div>
+    <div class="dept-mini-card"><div class="k">Present Staff</div><div class="v">${presentEmployees.length}</div><div class="s">Total staff ${active.employees.length}</div></div>
+    <div class="dept-mini-card"><div class="k">Salary Cost</div><div class="v" style="color:var(--green)">₹${fmt(active.salary)}</div><div class="s">Present salary for date</div></div>
+    <div class="dept-mini-card"><div class="k">OT Cost</div><div class="v" style="color:#d97706">₹${fmt(active.ot)}</div><div class="s">Overtime for date</div></div>
+    <div class="dept-mini-card"><div class="k">Total Cost</div><div class="v" style="color:var(--accent)">₹${fmt(active.total)}</div><div class="s">Salary + OT</div></div>`;
+  document.getElementById('d-dept-list').innerHTML=presentEmployees.length ? presentEmployees.map((e,i)=>`<tr>
+      <td class="cm">${i+1}</td>
+      <td style="font-weight:500">${e.name}</td>
+      <td class="cm">${e.position||'—'}</td>
+      <td><span class="badge b${e.shift}">${e.shift}h</span></td>
+      <td class="mono">₹${fmt(e.salaryCost)}</td>
+      <td>${e.otHours?`<span class="badge bot">${e.otHours>0?'+':''}${Number(e.otHours).toFixed(1)}h</span>`:'—'}</td>
+      <td class="mono ca">${e.otCost?`₹${fmt(e.otCost)}`:'—'}</td>
+      <td class="mono" style="font-weight:600">₹${fmt(e.totalCost)}</td>
+    </tr>`).join('') : `<tr><td colspan="8" style="text-align:center;padding:22px;color:var(--muted)">No present employees in ${active.department} on ${fmtD(date)}</td></tr>`;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   EMPLOYEES
+══════════════════════════════════════════════════════════════ */
+function renderEmpTable(){
+  document.getElementById('emp-tbody').innerHTML=EMPS.map((e,i)=>`<tr>
+    <td class="cm">${i+1}</td><td style="font-weight:500">${e.name}</td>
+    <td><span class="badge b8">${normalizeDepartment(e.dept)}</span></td>
+    <td class="cm">${e.pos}</td><td class="mono">₹${fmt(e.salary)}</td>
+    <td><span class="badge b${e.shift}">${e.shift}h</span></td>
+    <td class="mono cm">₹${fmt(Math.round(salaryPerDay(e.salary, new Date().toISOString().slice(0,7))))}/day</td>
+    <td><button class="btn btn-r btn-sm" onclick="delEmp(${e.id},'${e.name.replace(/'/g,"\\'")}')">Remove</button></td>
+  </tr>`).join('')||'<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--muted)">No employees</td></tr>';
+}
+async function addEmployee(){
+  const name=document.getElementById('en').value.trim().toUpperCase();
+  if(!name){toast('⚠ Enter name','err');return;}
+  const dept=document.getElementById('ed').value.trim();
+  const sal=+document.getElementById('es').value||0,shift=+document.getElementById('esh').value;
+  const id=maxId();
+  EMPS.push({id,name,dept,pos:document.getElementById('ep').value.trim().toUpperCase(),salary:sal,shift});
+  saveLocalCache({reason:'employee-add', backupCurrent:true, backupReason:'before-employee-add'});
+  updateCounts();renderEmpTable();
+  document.getElementById('add-form').classList.remove('open');
+  ['en','ed','ep','es'].forEach(x=>document.getElementById(x).value='');
+  setPill('busy','Saving…');
+  try{
+    await gasGet({action:'addEmployee',id,name,department:dept,position:EMPS[EMPS.length-1].pos,salary:sal,shift,status:'ACTIVE'});
+    saveLocalCache({reason:'employee-add-cloud-sync'});
+    setPill('ok','Synced ✓');toast('✓ '+name+' saved','ok');
+  }catch(e){toast('📦 '+name+' saved locally (Supabase offline)','i');}
+}
+async function delEmp(id,name){
+  if(!confirm('Remove '+name+'?'))return;
+  saveLocalCache({reason:'employee-delete-backup', backupCurrent:true, backupReason:'before-employee-delete'});
+  EMPS=EMPS.filter(e=>e.id!==id);
+  saveLocalCache({reason:'employee-delete'});
+  updateCounts();renderEmpTable();
+  setPill('busy','Removing…');
+  try{await gasGet({action:'deleteEmployee',id});setPill('ok','Synced ✓');toast('✓ Removed','ok');}
+  catch(e){setPill('err','Error');toast('⚠ '+e.message,'err');}
+}
+
+function getDepartmentCostData(date=todayS()){
+  const groups = new Map();
+  EMPS.forEach(emp=>{
+    const dept = normalizeDepartment(emp.dept);
+    const cost = dailyEmployeeCost(emp, date);
+    if(!groups.has(dept)) groups.set(dept,{department:dept,employees:[],salary:0,ot:0,total:0,present:0,absent:0,holiday:0});
+    const g = groups.get(dept);
+    const rec = {
+      id: emp.id,
+      name: emp.name,
+      position: emp.pos,
+      shift: emp.shift,
+      status: cost.status,
+      salaryCost: cost.salaryCost,
+      otHours: cost.otHours,
+      otCost: cost.otCost,
+      totalCost: cost.totalCost
+    };
+    g.employees.push(rec);
+    g.salary += cost.salaryCost;
+    g.ot += cost.otCost;
+    g.total += cost.totalCost;
+    if(cost.status==='P') g.present++;
+    else if(cost.status==='H') g.holiday++;
+    else g.absent++;
+  });
+  return [...groups.values()].sort((a,b)=>b.total-a.total || a.department.localeCompare(b.department));
+}
+function openDeptCostModal(){
+  const dateEl = document.getElementById('dept-cost-date');
+  if(dateEl && !dateEl.value) dateEl.value = todayS();
+  document.getElementById('dept-cost-modal').style.display='flex';
+  renderDeptCostModal();
+}
+function closeDeptCostModal(){
+  const modal=document.getElementById('dept-cost-modal');
+  if(modal) modal.style.display='none';
+}
+function renderDeptCostModal(){
+  const date = document.getElementById('dept-cost-date')?.value || todayS();
+  const dateEl = document.getElementById('dept-cost-date');
+  if(dateEl && !dateEl.value) dateEl.value = date;
+  const data = getDepartmentCostData(date);
+  const summary = data.reduce((acc,g)=>{
+    acc.departments++;
+    acc.staff += g.employees.length;
+    acc.present += g.present;
+    acc.total += g.total;
+    return acc;
+  },{departments:0,staff:0,present:0,total:0});
+  const dayFood = mealTotalForDate(date);
+  document.getElementById('dept-cost-summary').innerHTML = `
+    <div class="box"><div class="lbl">Date</div><div class="val" style="font-size:15px">${fmtD(date)}</div></div>
+    <div class="box"><div class="lbl">Departments</div><div class="val">${summary.departments}</div></div>
+    <div class="box"><div class="lbl">Present Staff</div><div class="val">${summary.present}/${summary.staff}</div></div>
+    <div class="box"><div class="lbl">Dept Cost Total</div><div class="val">₹${fmt(summary.total)}</div><div style="font-size:11px;color:var(--muted);margin-top:4px">Food cost separate: ₹${fmt(dayFood)}</div></div>`;
+  document.getElementById('dept-cost-body').innerHTML = data.length ? data.map(g=>`
+    <div class="dep-group">
+      <div class="dep-head">
+        <div>
+          <div class="dep-title">${g.department}</div>
+          <div class="dep-meta">
+            <span>${g.employees.length} employees</span>
+            <span>${g.present} present</span>
+            <span>${g.absent} absent</span>
+            <span>${g.holiday} holiday</span>
+          </div>
+        </div>
+        <div class="dep-meta">
+          <span>Salary ₹${fmt(g.salary)}</span>
+          <span>OT ₹${fmt(g.ot)}</span>
+          <span style="font-weight:600;color:#d97706">Total ₹${fmt(g.total)}</span>
+        </div>
+      </div>
+      <div class="scrollable">
+        <table class="dep-table">
+          <thead><tr><th>#</th><th>Name</th><th>Position</th><th>Shift</th><th>Status</th><th>Salary/Day</th><th>OT Hrs</th><th>OT Cost</th><th>Total</th></tr></thead>
+          <tbody>
+            ${g.employees.map((e,i)=>`<tr>
+              <td class="cm">${i+1}</td>
+              <td style="font-weight:500">${e.name}</td>
+              <td class="cm">${e.position||'—'}</td>
+              <td><span class="badge b${e.shift}">${e.shift}h</span></td>
+              <td><span class="badge ${e.status==='P'?'bp':e.status==='H'?'bh':'ba'}">${e.status==='P'?'Present':e.status==='H'?'Holiday':'Absent'}</span></td>
+              <td class="mono">${e.salaryCost?`₹${fmt(e.salaryCost)}`:'—'}</td>
+              <td>${e.otHours?`<span class="badge bot">${e.otHours>0?'+':''}${Number(e.otHours).toFixed(1)}h</span>`:'—'}</td>
+              <td class="mono ca">${e.otCost?`₹${fmt(e.otCost)}`:'—'}</td>
+              <td class="mono" style="font-weight:600">${e.totalCost?`₹${fmt(e.totalCost)}`:'—'}</td>
+            </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>`).join('') : '<div class="dep-empty">No employees found</div>';
+}
+
+/* ══════════════════════════════════════════════════════════════
+   ATTENDANCE
+══════════════════════════════════════════════════════════════ */
+
+function round2(n){ return Math.round(Number(n||0)*100)/100; }
+function addMinutesHHMM(time, minutes){
+  const safe = time || '09:00';
+  const [h,m] = safe.split(':').map(Number);
+  const base = (Number.isFinite(h)?h:9)*60 + (Number.isFinite(m)?m:0);
+  const total = ((base + Math.round(minutes)) % 1440 + 1440) % 1440;
+  return String(Math.floor(total/60)).padStart(2,'0') + ':' + String(total%60).padStart(2,'0');
+}
+function defaultInTime(shift){ return Number(shift)===12 ? '08:00' : '09:00'; }
+function computeTimeRange(workedHrs=0, inTime='09:00'){
+  const inT = inTime || '09:00';
+  const totalHours = Math.max(0, Number(workedHrs||0));
+  return { in: inT, out: totalHours>0 ? addMinutesHHMM(inT, totalHours*60) : '', hrs: totalHours };
+}
+function deriveAttendanceRule(shift, workedHrs, forcedStatus=''){
+  const sh=Number(shift||8), hrs=Math.max(0, round2(workedHrs));
+  if(forcedStatus==='H') return {status:'H', hrs:0, ot:0};
+  if(hrs<=0) return {status:(forcedStatus==='H'?'H':'A'), hrs:0, ot:0};
+  if(sh===8){
+    return hrs>=8 ? {status:'P', hrs, ot:round2(hrs-8)} : {status:'A', hrs, ot:round2(hrs)};
+  }
+  if(sh===12){
+    return hrs>=8 ? {status:'P', hrs, ot:round2(hrs-12)} : {status:'A', hrs, ot:round2(hrs)};
+  }
+  return hrs>=sh ? {status:'P', hrs, ot:round2(hrs-sh)} : {status:'A', hrs, ot:round2(hrs)};
+}
+function copyYesterday(){
+  const date = document.getElementById('att-date').value || todayS();
+  const prev = new Date(date+'T00:00');
+  prev.setDate(prev.getDate()-1);
+  const prevKey = prev.toISOString().slice(0,10);
+  const prevAtt = da(prevKey);
+  if(!Object.keys(prevAtt).length){ toast('No attendance found for '+prevKey,'err'); return; }
+  EDITS = {};
+  EMPS.forEach(e=>{
+    const r = prevAtt[e.id];
+    if(r){
+      EDITS[e.id] = {
+        status: r.status || 'A',
+        in_time: r.in_time || '',
+        out_time: r.out_time || '',
+        ot: round2(r.ot),
+        hrs: round2(r.hrs)
+      };
+    }
+  });
+  ATT_DIRTY=true;
+  renderAtt();
+  toast('Copied attendance from '+prevKey,'ok');
+}
+function getLateTag(inTime, shift){
+  const stdIn = shift===12 ? (document.getElementById('std-in-12')?.value||'08:00') : (document.getElementById('std-in-8')?.value||'09:00');
+  const grace = parseInt(document.getElementById('grace-min')?.value||10);
+  if(!inTime) return '';
+  const [ih,im] = inTime.split(':').map(Number);
+  const [sh,sm] = stdIn.split(':').map(Number);
+  const inMins = ih*60+im, stdMins = sh*60+sm;
+  const diff = inMins - stdMins - grace;
+  if(diff > 0) return `<span class="late-tag">⚠ Late ${diff}m</span>`;
+  if(inMins <= stdMins) return `<span class="ontime-tag">✓ On Time</span>`;
+  return `<span class="ontime-tag">✓ On Time</span>`;
+}
+
+function loadAttendanceForDate(date, opts={}){
+  const dEl=document.getElementById('att-date');
+  const target=date || dEl?.value || todayS();
+  if(!dEl) return false;
+  if(ATT_DIRTY && ACTIVE_ATT_DATE && ACTIVE_ATT_DATE!==target && !opts.force){
+    const ok=confirm(`You have unsaved attendance changes for ${fmtD(ACTIVE_ATT_DATE)}. Load ${fmtD(target)} and discard those changes?`);
+    if(!ok){ dEl.value=ACTIVE_ATT_DATE; return false; }
+  }
+  dEl.value=target;
+  ACTIVE_ATT_DATE=target;
+  ATT_DIRTY=false;
+  EDITS={};
+  renderAtt();
+  return true;
+}
+function loadSelectedAttendance(){
+  const d=document.getElementById('att-date')?.value || todayS();
+  if(loadAttendanceForDate(d,{force:true})) toast(`Loaded saved attendance for ${fmtD(d)}`,'ok');
+}
+function onAttendanceDateChange(){
+  const d=document.getElementById('att-date')?.value || todayS();
+  if(loadAttendanceForDate(d)) toast(`Loaded saved attendance for ${fmtD(d)}`,'ok');
+}
+
+function renderAtt(){
+  const dEl=document.getElementById('att-date');
+  if(!dEl.value)dEl.value=todayS();
+  const date=dEl.value,dayAtt=da(date);
+  if(!ACTIVE_ATT_DATE) ACTIVE_ATT_DATE=date;
+  let p=0,a=0,h=0,ot=0,lateCount=0,rows='';
+  EMPS.forEach((e,i)=>{
+    const sv=dayAtt[e.id]||{},ed=EDITS[e.id]||{};
+    const forcedStatus=ed.status??sv.status??'A';
+    const workedHrs=round2(ed.hrs??sv.hrs??0);
+    const calc=deriveAttendanceRule(e.shift, workedHrs, forcedStatus);
+    const defIn=defaultInTime(e.shift);
+    const inRef=ed.in_time??sv.in_time??defIn;
+    const outRef=ed.out_time??sv.out_time??'';
+    const auto=calc.status==='H' ? {in:'',out:'',hrs:0} : computeTimeRange(calc.hrs, inRef);
+    const currentIn = calc.status==='H'?'': (inRef||auto.in||'');
+    const currentOut = calc.status==='H'?'': (outRef||auto.out||'');
+    if(calc.status==='P') p++; else if(calc.status==='H') h++; else a++;
+    if(calc.status!=='H') ot+=calc.ot;
+    const lateTag = calc.status==='P' ? getLateTag(currentIn, e.shift) : '';
+    if(lateTag.includes('Late')) lateCount++;
+    EDITS[e.id]={
+      status: calc.status,
+      hrs: calc.hrs,
+      ot: calc.ot,
+      in_time: currentIn,
+      out_time: currentOut
+    };
+    rows+=`<tr>
+      <td class="cm">${i+1}</td>
+      <td style="font-weight:500;font-size:12px">${e.name}</td>
+      <td><span class="badge b${e.shift}">${e.shift}h</span></td>
+      <td><div class="atog">
+        <button class="${calc.status==='P'?'tp':''}" onclick="setS(${e.id},'P')">P</button>
+        <button class="${calc.status==='A'?'ta':''}" onclick="setS(${e.id},'A')">A</button>
+        <button class="${calc.status==='H'?'th':''}" onclick="setS(${e.id},'H')">H</button>
+      </div></td>
+      <td>
+        <input type="time" class="time-inp" id="in-inp-${e.id}" value="${currentIn}" ${calc.status==='H'?'disabled':''} onchange="updInTime(${e.id})">
+      </td>
+      <td>
+        <input type="time" class="time-inp" id="out-inp-${e.id}" value="${currentOut}" ${calc.status==='H'?'disabled':''} onchange="updOutTime(${e.id})">
+      </td>
+      <td>
+        <div style="display:flex;align-items:center;gap:6px">
+          <button class="btn btn-sm" ${calc.status==='H'?'disabled':''} onclick="bumpHours(${e.id},-0.5)">−</button>
+          <input type="number" min="0" step="0.5" id="hrs-inp-${e.id}" value="${calc.status==='H'?0:calc.hrs}" ${calc.status==='H'?'disabled':''} onchange="updHours(${e.id})" style="width:62px">
+          <button class="btn btn-sm" ${calc.status==='H'?'disabled':''} onclick="bumpHours(${e.id},0.5)">+</button>
+        </div>
+      </td>
+      <td id="otv-${e.id}">${calc.status==='H' || calc.ot===0 ? '—' : `<span class="badge bot">${calc.ot>0?'+':''}${calc.ot.toFixed(1)}h</span>`}</td>
+      <td id="late-${e.id}">${calc.status==='P' ? (lateTag||'<span class="ontime-tag">✓ On Time</span>') : '—'}</td>
+    </tr>`;
+  });
+  document.getElementById('att-tbody').innerHTML=rows;
+  document.getElementById('sb-p').textContent=p+' Present';
+  document.getElementById('sb-a').textContent=a+' Absent';
+  document.getElementById('sb-h').textContent=h+' Holiday';
+  document.getElementById('sb-ot').textContent=(ot>0?'+':'')+ot.toFixed(1)+' OT Hrs';
+  // Update late counter in sbar if exists
+  const lateEl=document.getElementById('sb-late');
+  if(lateEl) lateEl.textContent=lateCount+' Late';
+}
+window.updInTime=function(eid){
+  const inp=document.getElementById('in-inp-'+eid);
+  if(!inp||inp.disabled) return;
+  if(!EDITS[eid]) EDITS[eid]={};
+  EDITS[eid].in_time=inp.value;
+  ATT_DIRTY=true;
+  // Recalc out time if hrs known
+  const hrs=EDITS[eid].hrs||0;
+  if(hrs>0){
+    EDITS[eid].out_time=addMinutesHHMM(inp.value, hrs*60);
+  }
+  // Update late tag live
+  const e=EMPS.find(x=>x.id===eid);
+  const lEl=document.getElementById('late-'+eid);
+  if(lEl && e && EDITS[eid].status==='P'){
+    const tag=getLateTag(inp.value, e.shift);
+    lEl.innerHTML=tag||'<span class="ontime-tag">✓ On Time</span>';
+  }
+};
+window.updOutTime=function(eid){
+  const inp=document.getElementById('out-inp-'+eid);
+  if(!inp||inp.disabled) return;
+  if(!EDITS[eid]) EDITS[eid]={};
+  EDITS[eid].out_time=inp.value;
+  ATT_DIRTY=true;
+  // Recalculate worked hrs from IN/OUT
+  const inInp=document.getElementById('in-inp-'+eid);
+  if(inInp && inInp.value && inp.value){
+    const hrs=calcH(inInp.value, inp.value);
+    EDITS[eid].hrs=hrs;
+    const e=EMPS.find(x=>x.id===eid);
+    if(e){
+      const calc=deriveAttendanceRule(e.shift, hrs, EDITS[eid].status||'P');
+      EDITS[eid].status=calc.status; EDITS[eid].ot=calc.ot; EDITS[eid].hrs=calc.hrs;
+    }
+    ATT_DIRTY=true;
+    renderAtt();
+  }
+};
+window.setS=function(eid,st){
+  const e=EMPS.find(x=>x.id===eid)||{};
+  const currentIn = EDITS[eid]?.in_time || ((ATTS[document.getElementById('att-date').value||todayS()]||{})[eid]?.in_time) || defaultInTime(e.shift);
+
+  if(st==='H'){
+    EDITS[eid]={status:'H', hrs:0, ot:0, in_time:'', out_time:''};
+  }else if(st==='P'){
+    const baseHrs=Number(e.shift||8);
+    const calc=deriveAttendanceRule(e.shift, baseHrs, 'P');
+    const auto=computeTimeRange(calc.hrs, currentIn);
+    EDITS[eid]={status:calc.status, hrs:calc.hrs, ot:calc.ot, in_time:auto.in, out_time:auto.out};
+  }else if(st==='A'){
+    EDITS[eid]={status:'A', hrs:0, ot:0, in_time:'', out_time:''};
+  }
+  ATT_DIRTY=true;
+  renderAtt();
+};
+window.bumpHours=function(eid,delta){
+  const inp=document.getElementById('hrs-inp-'+eid);
+  if(!inp || inp.disabled) return;
+  const next=Math.max(0,(parseFloat(inp.value)||0)+delta);
+  inp.value=String(round2(next));
+  updHours(eid);
+};
+window.updHours=function(eid){
+  const e=EMPS.find(x=>x.id===eid); if(!e) return;
+  const inp=document.getElementById('hrs-inp-'+eid);
+  const hrs=round2(parseFloat(inp?.value)||0);
+  const prevStatus=EDITS[eid]?.status || ((ATTS[document.getElementById('att-date').value||todayS()]||{})[eid]?.status) || 'A';
+  const calc=deriveAttendanceRule(e.shift, hrs, prevStatus==='H'?'A':prevStatus);
+  const auto=computeTimeRange(calc.hrs, EDITS[eid]?.in_time || defaultInTime(e.shift));
+  EDITS[eid]={status:calc.status, hrs:calc.hrs, ot:calc.ot, in_time:auto.in, out_time:auto.out};
+  ATT_DIRTY=true;
+  renderAtt();
+};
+function markAll(st){
+  EDITS={};
+  EMPS.forEach(e=>{
+    if(st==='H'){
+      EDITS[e.id]={status:'H', hrs:0, ot:0, in_time:'', out_time:''};
+    }else if(st==='P'){
+      const baseHrs=e.shift===12?12:8;
+      const calc=deriveAttendanceRule(e.shift, baseHrs, 'P');
+      const auto=computeTimeRange(calc.hrs, defaultInTime(e.shift));
+      EDITS[e.id]={status:calc.status, hrs:calc.hrs, ot:calc.ot, in_time:auto.in, out_time:auto.out};
+    }else{
+      EDITS[e.id]={status:'A', hrs:0, ot:0, in_time:'', out_time:''};
+    }
+  });
+  ATT_DIRTY=true;
+  renderAtt();
+  toast(st==='P'?'All marked Present':st==='H'?'All marked Holiday':'All marked Absent');
+}
+async function saveAtt(){
+  const date=document.getElementById('att-date').value;
+  if(!date){toast('⚠ Select a date','err');return;}
+  if(!Object.keys(EDITS).length){toast('No changes to save');return;}
+  if(!ATTS[date])ATTS[date]={};
+  const rows=[];
+  EMPS.forEach(e=>{
+    const ed=EDITS[e.id]; if(!ed) return;
+    // Read actual time inputs if available
+    const inInp=document.getElementById('in-inp-'+e.id);
+    const outInp=document.getElementById('out-inp-'+e.id);
+    if(inInp && inInp.value) ed.in_time=inInp.value;
+    if(outInp && outInp.value) ed.out_time=outInp.value;
+    const r={
+      status: ed.status||'A',
+      in_time: ed.in_time||'',
+      out_time: ed.out_time||'',
+      ot: round2(ed.ot),
+      hrs: round2(ed.hrs)
+    };
+    if(r.status==='H'){
+      r.in_time=''; r.out_time=''; r.ot=0; r.hrs=0;
+    }else{
+      const auto=computeTimeRange(r.hrs, r.in_time||defaultInTime(e.shift));
+      r.in_time=auto.in; r.out_time=auto.out; r.hrs=auto.hrs;
+    }
+    ATTS[date][e.id]=r;
+    rows.push({employee_id:e.id,employee_name:e.name,date,status:r.status,
+               in_time:r.in_time,out_time:r.out_time,total_hours:r.hrs,ot_hours:r.ot});
+  });
+  setPill('busy',`Saving ${rows.length} rows…`);
+  // Always update local cache first (instant, offline-safe)
+  saveLocalCache({reason:'attendance-local-save', backupCurrent:true, backupReason:'before-attendance-save'});
+  try{
+    await gasGet({action:'saveAttendance',rows});
+    ATT_DIRTY=false;
+    EDITS={}; renderAtt(); renderDashboard(); renderPayroll(); renderOT(); renderReports();
+    saveLocalCache({reason:'attendance-cloud-sync'});
+    setPill('ok','Synced ✓'); toast(`✓ Attendance saved for ${date}`,'ok');
+  }catch(e){
+    // Data is already in memory + localStorage — just warn
+    ATT_DIRTY=false;
+    EDITS={}; renderAtt(); renderDashboard();
+    toast(`📦 Saved locally (Supabase offline) — will sync when connected`,'i');
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   PAYROLL
+══════════════════════════════════════════════════════════════ */
+function renderPayroll(){
+  const pmEl=document.getElementById('pay-month');
+  if(!pmEl.value)pmEl.value=new Date().toISOString().slice(0,7);
+  const mo=pmEl.value,dim=daysInMonth(mo),foodMonth=mealTotalForMonth(mo);
+  document.getElementById('pay-days').value = dim;
+  const mAdv=ADVS[mo]||{};
+  let tS=0,tO=0,tFood=foodMonth,tA=0,tP=0,tC=0,rows='';
+  EMPS.forEach((e,i)=>{
+    let days=0,otH=0;
+    daInMo(mo).forEach(([,dayA])=>{
+      const r=dayA[e.id];
+      if(!r || r.status==='H') return;
+      if(r.status==='P') days++;
+      otH += num(r.ot);
+    });
+    const perDay = salaryPerDay(e.salary, mo);
+    const otRate = otRatePerHour(e.salary, mo, e.shift);
+    const sal=Math.round(perDay*days),otA=Math.round(otRate*otH);
+    const adv=mAdv[e.id]||0,net=sal+otA-adv,cost=net;
+    tS+=sal;tO+=otA;tA+=adv;tP+=net;tC+=cost;
+    rows+=`<tr>
+      <td class="cm">${i+1}</td><td style="font-weight:500;font-size:11px">${e.name}</td>
+      <td><span class="badge b${e.shift}">${e.shift}h</span></td>
+      <td style="text-align:center"><button class="btn btn-sm" onclick="openEmpAttendanceModal('${mo}',${e.id},'${e.name.replace(/'/g,"\\'")}')">${days}</button></td><td style="text-align:center">${otH>0?'+':''}${otH.toFixed(1)}</td>
+      <td class="mono">₹${fmt(sal)}</td><td class="mono ca">${otA!==0?(otA>0?'₹'+fmt(otA):'-₹'+fmt(Math.abs(otA))):'—'}</td>
+      <td class="mono cg">—</td>
+      <td><input class="adv-inp" type="number" value="${adv}" onchange="setAdv('${mo}',${e.id},'${e.name.replace(/'/g,"\\'")}',this.value)"></td>
+      <td class="mono" style="font-weight:500">₹${fmt(net)}</td>
+      <td class="mono cb" style="font-weight:500">₹${fmt(cost)}</td>
+    </tr>`;
+  });
+  const grandCost=tC+tFood;
+  document.getElementById('pay-tbody').innerHTML=rows;
+  document.getElementById('pay-tfoot').innerHTML=`
+    <td colspan="5">TOTAL</td>
+    <td class="mono">₹${fmt(tS)}</td><td class="mono ca">${tO!==0?(tO>0?'₹'+fmt(tO):'-₹'+fmt(Math.abs(tO))):'—'}</td>
+    <td class="mono cg">₹${fmt(tFood)}</td><td class="mono">₹${fmt(tA)}</td>
+    <td class="mono" style="font-size:13px">₹${fmt(tP)}</td>
+    <td class="mono cb" style="font-size:13px">₹${fmt(grandCost)}</td>`;
+  document.getElementById('pay-stats').innerHTML=`
+    <div class="stat-card"><div class="stat-label">Net Payroll</div><div class="stat-val" style="font-size:17px">₹${fmt(tP)}</div></div>
+    <div class="stat-card"><div class="stat-label">OT Paid / Adj.</div><div class="stat-val sv-a" style="font-size:17px">${tO>=0?'₹'+fmt(tO):'-₹'+fmt(Math.abs(tO))}</div></div>
+    <div class="stat-card"><div class="stat-label">Food / Canteen</div><div class="stat-val sv-g" style="font-size:17px">₹${fmt(tFood)}</div></div>
+    <div class="stat-card"><div class="stat-label">Total Cost</div><div class="stat-val sv-b" style="font-size:17px">₹${fmt(grandCost)}</div></div>`;
+}
+async function setAdv(mo,eid,name,val){
+  const amt=+val||0;
+  if(!ADVS[mo])ADVS[mo]={};ADVS[mo][eid]=amt;saveLocalCache({reason:'advance-save', backupCurrent:true, backupReason:'before-advance-save'});renderPayroll();
+  try{await gasGet({action:'saveAdvance',employee_id:eid,employee_name:name,month:mo,amount:amt});}
+  catch(e){toast('⚠ Advance: '+e.message,'err');}
+}
+
+
+function punctualityBadgeForRecord(rec, shift){
+  const inTime = String(rec?.in_time || '').trim();
+  if(!inTime) return '<span class="badge bh">—</span>';
+  const std = (+shift===12) ? (document.getElementById('std-in-12')?.value || '08:00') : (document.getElementById('std-in-8')?.value || '09:00');
+  const grace = +(document.getElementById('grace-min')?.value || 10);
+  const toMin = t => { const [h,m] = String(t||'').split(':').map(Number); return ((h||0)*60)+(m||0); };
+  const diff = toMin(inTime) - toMin(std);
+  if(diff > grace) return `<span class="late-tag">Late ${diff}m</span>`;
+  if(diff < 0) return `<span class="ontime-tag">Early ${Math.abs(diff)}m</span>`;
+  return `<span class="ontime-tag">On Time</span>`;
+}
+function openEmpAttendanceModal(mo,eid,name){
+  const presentRows = daInMo(mo)
+    .map(([date,dayA]) => {
+      const rec = dayA[eid];
+      if(!rec || rec.status !== 'P') return null;
+      const emp = EMPS.find(x => x.id === eid) || {};
+      return {
+        date,
+        status: rec.status || 'A',
+        in_time: rec.in_time || '',
+        out_time: rec.out_time || '',
+        hrs: num(rec.hrs),
+        ot: num(rec.ot),
+        shift: +(emp.shift || 8)
+      };
+    })
+    .filter(Boolean)
+    .sort((a,b)=>a.date.localeCompare(b.date));
+
+  const totalOt = presentRows.reduce((s,r)=>s+num(r.ot),0);
+  const totalHrs = presentRows.reduce((s,r)=>s+num(r.hrs),0);
+  const firstDate = presentRows[0]?.date || '';
+  const lastDate = presentRows[presentRows.length-1]?.date || '';
+
+  document.getElementById('emp-att-title').textContent = `${name} · Daily Attendance`;
+  document.getElementById('emp-att-sub').textContent = mo;
+  document.getElementById('emp-att-summary').innerHTML = `
+    <div class="box"><div class="lbl">Present Days</div><div class="val">${presentRows.length}</div></div>
+    <div class="box"><div class="lbl">Total Worked Hrs</div><div class="val">${totalHrs.toFixed(1)}</div></div>
+    <div class="box"><div class="lbl">Total OT Hrs</div><div class="val">${totalOt.toFixed(1)}</div></div>
+    <div class="box"><div class="lbl">Date Range</div><div class="val" style="font-size:13px">${presentRows.length ? `${fmtD(firstDate)} → ${fmtD(lastDate)}` : 'No present days'}</div></div>`;
+
+  const body = presentRows.length ? presentRows.map((r,i)=>`
+    <tr>
+      <td class="cm">${i+1}</td>
+      <td style="font-weight:500">${fmtD(r.date)}</td>
+      <td><span class="badge bp">Present</span></td>
+      <td class="mono">${r.in_time || '—'}</td>
+      <td class="mono">${r.out_time || '—'}</td>
+      <td class="mono">${r.hrs ? r.hrs.toFixed(1) : '—'}</td>
+      <td class="mono">${r.ot ? (r.ot>0?'+':'') + r.ot.toFixed(1) : '0.0'}</td>
+      <td>${punctualityBadgeForRecord(r, r.shift)}</td>
+    </tr>`).join('') : `<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--muted)">No present dates found for ${name} in ${mo}</td></tr>`;
+
+  document.getElementById('emp-att-body').innerHTML = body;
+  document.getElementById('emp-att-modal').style.display = 'flex';
+}
+function closeEmpAttendanceModal(){
+  document.getElementById('emp-att-modal').style.display = 'none';
+}
+
+/* ══════════════════════════════════════════════════════════════
+   SNACKS
+══════════════════════════════════════════════════════════════ */
+function renderSnacks(){
+  updPP();
+  const dateEl=document.getElementById('meal-date');
+  if(dateEl && !dateEl.value) dateEl.value=todayS();
+  const activeDate=(dateEl?.value)||todayS();
+  document.getElementById('snk-lbl').textContent='Selected: '+fmtD(activeDate);
+  const curr=mealEntry(activeDate);
+  if(document.getElementById('meal-tea')) document.getElementById('meal-tea').value=curr.tea;
+  if(document.getElementById('meal-snacks')) document.getElementById('meal-snacks').value=curr.snacks;
+  if(document.getElementById('meal-dinner')) document.getElementById('meal-dinner').value=curr.dinner;
+  updMealPreview();
+
+  const items=Object.entries(MEALS).sort((a,b)=>b[0].localeCompare(a[0]));
+  if(!items.length){
+    document.getElementById('snk-body').innerHTML='<tr><td colspan="5" style="text-align:center;padding:24px;color:var(--muted)">No food entries yet</td></tr>';
+    document.getElementById('snk-foot').innerHTML='<td colspan="5" style="text-align:center;color:var(--muted)">Start by saving one daily entry</td>';
+    return;
+  }
+  let mTea=0,mSnk=0,mDin=0,mTot=0;
+  document.getElementById('snk-body').innerHTML=items.map(([date,entry])=>{
+    const tea=num(entry.tea),snacks=num(entry.snacks),dinner=num(entry.dinner),total=mealCost(entry);
+    mTea+=tea;mSnk+=snacks;mDin+=dinner;mTot+=total;
+    return `<tr>
+      <td style="font-weight:500">${fmtD(date)}</td>
+      <td class="mono">${tea}</td>
+      <td class="mono">${snacks}</td>
+      <td class="mono">${dinner}</td>
+      <td class="mono" style="font-weight:500">₹${fmt(total)}</td>
+    </tr>`;
+  }).join('');
+  document.getElementById('snk-foot').innerHTML=`<td style="font-weight:500">TOTAL</td>
+    <td class="mono">${fmt(mTea)}</td>
+    <td class="mono">${fmt(mSnk)}</td>
+    <td class="mono">${fmt(mDin)}</td>
+    <td class="mono" style="font-weight:600;color:var(--accent)">₹${fmt(mTot)}</td>`;
+}
+async function saveSnacks(){
+  SNK.tea=+document.getElementById('t-m').value||10;
+  SNK.snacks=+document.getElementById('t-s').value||20;
+  SNK.dinner=+document.getElementById('t-d').value||80;
+  saveLocalCache({reason:'snack-rate-save', backupCurrent:true, backupReason:'before-snack-rate-save'});
+  setPill('busy','Saving…');
+  try{
+    await gasGet({action:'saveSnacks',morning:SNK.tea,evening:SNK.dinner,snacks:SNK.snacks});
+    saveLocalCache({reason:'snack-rate-cloud-sync'});
+    setPill('ok','Synced ✓');toast('✓ Food rates saved','ok');renderSnacks(); renderDashboard(); renderPayroll(); renderReports();
+  }catch(e){setPill('err','Error');toast('⚠ '+e.message,'err');}
+}
+
+/* ══════════════════════════════════════════════════════════════
+   OT
+══════════════════════════════════════════════════════════════ */
+function renderOT(){
+  const el=document.getElementById('ot-month');
+  if(!el.value)el.value=new Date().toISOString().slice(0,7);
+  const mo=el.value;let tD=0,tO=0,tA=0,rows='';
+  EMPS.forEach((e,i)=>{
+    let days=0,otH=0;
+    daInMo(mo).forEach(([,dayA])=>{
+      const r=dayA[e.id];
+      if(!r || r.status==='H') return;
+      if(r.status==='P') days++;
+      otH+=num(r.ot);
+    });
+    const rate=Math.round(otRatePerHour(e.salary, mo, e.shift)),otA=Math.round(rate*otH);
+    tD+=days;tO+=otH;tA+=otA;
+    rows+=`<tr><td class="cm">${i+1}</td><td style="font-weight:500">${e.name}</td>
+      <td><span class="badge b${e.shift}">${e.shift}h</span></td>
+      <td style="text-align:center">${days}</td>
+      <td style="text-align:center">${otH!==0?`<span class="badge bot">${otH>0?'+':''}${otH.toFixed(1)}h</span>`:'—'}</td>
+      <td class="mono cm">₹${fmt(rate)}</td>
+      <td class="mono ca" style="font-weight:${otA!==0?500:400}">${otA!==0?(otA>0?'₹'+fmt(otA):'-₹'+fmt(Math.abs(otA))):'—'}</td></tr>`;
+  });
+  document.getElementById('ot-tbody').innerHTML=rows;
+  document.getElementById('ot-tfoot').innerHTML=`<td colspan="3">TOTAL</td>
+    <td style="text-align:center">${tD}</td><td style="text-align:center" class="ca">${tO>0?'+':''}${tO.toFixed(1)}h</td>
+    <td></td><td class="mono ca" style="font-weight:600">${tA>=0?'₹'+fmt(tA):'-₹'+fmt(Math.abs(tA))}</td>`;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   REPORTS
+══════════════════════════════════════════════════════════════ */
+function renderReports(){
+  const months={};
+  Object.entries(ATTS).forEach(([date,dayA])=>{
+    const m=date.slice(0,7);
+    if(!months[m]) months[m]={days:new Set(),sal:0,ot:0,food:mealTotalForMonth(m)};
+    months[m].days.add(date);
+    Object.entries(dayA).forEach(([eid,r])=>{
+      if(!r || r.status==='H') return;
+      const e=EMPS.find(x=>x.id===+eid); if(!e) return;
+      if(r.status==='P') months[m].sal+=Math.round(salaryPerDay(e.salary, m));
+      months[m].ot+=Math.round(otRatePerHour(e.salary, m, e.shift)*num(r.ot));
+    });
+  });
+  Object.keys(MEALS).forEach(date=>{
+    const m=date.slice(0,7);
+    if(!months[m]) months[m]={days:new Set(),sal:0,ot:0,food:mealTotalForMonth(m)};
+  });
+  document.getElementById('rep-body').innerHTML=Object.entries(months)
+    .sort((a,b)=>b[0].localeCompare(a[0]))
+    .map(([m,d])=>{const tot=d.sal+d.ot+d.food;
+      return`<tr><td style="font-weight:500">${m}</td><td>${d.days.size}</td><td>${EMPS.length}</td>
+        <td class="mono">₹${fmt(d.sal)}</td><td class="mono ca">${d.ot>=0?'₹'+fmt(d.ot):'-₹'+fmt(Math.abs(d.ot))}</td>
+        <td class="mono cg">₹${fmt(d.food)}</td><td class="mono cb" style="font-weight:500">₹${fmt(tot)}</td></tr>`;})
+    .join('')||'<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--muted)">No data yet</td></tr>';
+  document.getElementById('rep-sal').innerHTML=[...EMPS].sort((a,b)=>b.salary-a.salary).slice(0,5)
+    .map(e=>`<div style="display:flex;justify-content:space-between;padding:8px 14px;border-bottom:1px solid #f3f4f6;font-size:12px">
+      <span>${e.name}</span><span class="mono ca">₹${fmt(e.salary)}</span></div>`).join('');
+  const mo=new Date().toISOString().slice(0,7);
+  const otR=EMPS.map(e=>{
+    const h=daInMo(mo).reduce((s,[,dayA])=>{
+      const r=dayA[e.id];
+      return s+((r && r.status!=='H') ? num(r.ot) : 0);
+    },0);
+    return{...e,otH:h};
+  }).filter(e=>e.otH!==0).sort((a,b)=>Math.abs(b.otH)-Math.abs(a.otH)).slice(0,5);
+  document.getElementById('rep-ot').innerHTML=otR.length
+    ?otR.map(e=>`<div style="display:flex;justify-content:space-between;padding:8px 14px;border-bottom:1px solid #f3f4f6;font-size:12px">
+      <span>${e.name}</span><span class="badge bot">${e.otH>0?'+':''}${e.otH.toFixed(1)}h</span></div>`).join('')
+    :'<div style="padding:16px;text-align:center;color:var(--muted);font-size:12px">No OT this month</div>';
+}
+
+/* ══════════════════════════════════════════════════════════════
+   IMPORT EXCEL
+══════════════════════════════════════════════════════════════ */
+function xcv(ws,r,c){const a=XLSX.utils.encode_cell({r:r-1,c:c-1});const cell=ws[a];return cell?(cell.t==='d'?cell.v:cell.v):null;}
+function doFile(file,type){
+  if(!file)return;
+  const rdr=new FileReader();
+  rdr.onload=ev=>{
+    try{
+      const wb=XLSX.read(ev.target.result,{type:'array',cellDates:true});
+      const ws=wb.Sheets['FACTORY LABOUR'] || wb.Sheets['employee_master_template'] || wb.Sheets[wb.SheetNames[0]];
+      if(!ws){toast('⚠ No sheet found in this Excel file','err');return;}
+      if(type==='emp')parseEmpXL(ws);else parseAttXL(ws);
+    }catch(err){toast('⚠ '+err.message,'err');}
+  };
+  rdr.readAsArrayBuffer(file);
+}
+function parseEmpXL(ws){
+  const imp=[];
+  const h1=String(xcv(ws,1,1)||'').toUpperCase();
+  const h2=String(xcv(ws,1,2)||'').toUpperCase();
+
+  if(h1.includes('EMPLOYEE CODE') && h2.includes('EMPLOYEE NAME')){
+    for(let r=2;r<=500;r++){
+      const code=xcv(ws,r,1),nm=xcv(ws,r,2);if(!code&&!nm)break;
+      const sal=xcv(ws,r,5),sh=xcv(ws,r,6);
+      if(nm && typeof sal==='number' && (Number(sh)===8 || Number(sh)===12)){
+        const idMatch=String(code||'').match(/(\d+)/);
+        imp.push({
+          id:idMatch?Number(idMatch[1]):imp.length+1,
+          name:String(nm).trim().toUpperCase(),
+          department:String(xcv(ws,r,3)||'').trim(),
+          position:String(xcv(ws,r,4)||'').trim().toUpperCase(),
+          salary:Math.round(sal),
+          shift:Math.round(sh),
+          status:'ACTIVE'
+        });
+      }
+    }
+  } else {
+    for(let r=3;r<=300;r++){
+      const sr=xcv(ws,r,1),nm=xcv(ws,r,2);if(!sr&&!nm)break;
+      const sal=xcv(ws,r,4),sh=xcv(ws,r,5);
+      if(nm&&typeof sal==='number'&&(Number(sh)===8||Number(sh)===12))
+        imp.push({id:typeof sr==='number'?Math.round(sr):imp.length+1,
+          name:String(nm).trim().toUpperCase(),department:'',position:String(xcv(ws,r,3)||'').trim().toUpperCase(),
+          salary:Math.round(sal),shift:Math.round(sh),status:'ACTIVE'});
+    }
+  }
+
+  if(!imp.length){toast('No valid employees found','err');return;}
+  window._ie=imp;
+  document.getElementById('emp-prev').innerHTML=previewBox(imp.length,'employees',
+    imp.slice(0,6).map(e=>`${e.name} · ${e.department||'Unassigned'} · ${e.position} · ₹${fmt(e.salary)} · ${e.shift}h`),
+    Math.max(0, imp.length-6),"confirmEmpXL()");
+}
+
+async function loadCurrentEmployees(){
+  if(!CURRENT_EMPLOYEE_MASTER.length){toast('No seeded employee list found','err');return;}
+  if(!confirm(`Load ${CURRENT_EMPLOYEE_MASTER.length} current employees? This will merge/update the current employee master and keep old employees unless the same ID is updated.`)) return;
+  window._ie = CURRENT_EMPLOYEE_MASTER.map(r=>({...r}));
+  document.getElementById('emp-prev').innerHTML=previewBox(window._ie.length,'employees',
+    window._ie.slice(0,6).map(e=>`${e.name} · ${e.department||'Unassigned'} · ${e.position} · ₹${fmt(e.salary)} · ${e.shift}h`),
+    Math.max(0, window._ie.length-6),"confirmEmpXL()");
+}
+
+async function confirmEmpXL(){
+  const data=window._ie;if(!data)return;
+  const mergedMap = new Map(EMPS.map(r=>[+r.id,{...r}]));
+  data.forEach(r=>{
+    mergedMap.set(+r.id, {id:+r.id,name:r.name,dept:r.department||'',pos:r.position,salary:r.salary,shift:r.shift});
+  });
+  EMPS=[...mergedMap.values()].sort((a,b)=>a.id-b.id);
+  saveLocalCache({reason:'seed-employee-load', backupCurrent:true, backupReason:'before-seed-employee-load'});
+  updateCounts();renderEmpTable();
+  document.getElementById('emp-prev').innerHTML=`<div style="margin-top:8px;padding:8px 12px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:var(--rs);color:var(--green);font-size:12px">Saving ${data.length} employees to Sheet…</div>`;
+  setPill('busy',`Saving ${data.length} employees…`);
+  try{
+    await gasGet({action:'saveAllEmployees',rows:data});
+    setPill('ok','Synced ✓');
+    document.getElementById('emp-prev').innerHTML=`<div style="margin-top:8px;padding:8px 12px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:var(--rs);color:var(--green);font-size:12px">✓ ${data.length} employees saved!</div>`;
+    toast('✓ '+data.length+' employees saved','ok');
+  }catch(e){setPill('err','Error');toast('⚠ '+e.message,'err');}
+}
+function parseAttXL(ws){
+  const recs=[];
+  for(let dayCol=12;dayCol<=102;dayCol+=3){
+    const raw=xcv(ws,1,dayCol);if(!raw)continue;
+    let ds='';
+    if(raw instanceof Date)ds=raw.toISOString().slice(0,10);
+    else if(typeof raw==='string'&&raw.match(/\d{4}-\d{2}-\d{2}/))ds=raw.slice(0,10);
+    else continue;
+    for(let r=3;r<=300;r++){
+      const sr=xcv(ws,r,1),nm=xcv(ws,r,2);if(!sr&&!nm)break;
+      const pa=xcv(ws,r,dayCol),otR=xcv(ws,r,dayCol+1);
+      const isp=pa&&String(pa).toUpperCase().trim()==='P';
+      const otH=typeof otR==='number'?Math.max(0,otR):0;
+      const emp=EMPS.find(em=>em.name===String(nm||'').trim().toUpperCase()||em.id===Math.round(sr));
+      if(emp)recs.push({employee_id:emp.id,employee_name:emp.name,date:ds,
+        status:isp?'P':'A',in_time:'',out_time:'',total_hours:isp?emp.shift:0,ot_hours:otH});
+    }
+  }
+  const days=[...new Set(recs.map(r=>r.date))].length;
+  window._ia=recs;
+  document.getElementById('att-prev').innerHTML=previewBox(recs.length,'records across '+days+' days',
+    [...new Set(recs.map(r=>r.date))].slice(0,5),Math.max(0,days-5),"confirmAttXL()");
+}
+async function confirmAttXL(){
+  const data=window._ia;if(!data)return;
+  // Update local cache
+  data.forEach(r=>{
+    if(!ATTS[r.date])ATTS[r.date]={};
+    ATTS[r.date][r.employee_id]={status:r.status,in_time:'',out_time:'',ot:r.ot_hours,hrs:r.total_hours};
+  });
+  document.getElementById('att-prev').innerHTML=`<div style="margin-top:8px;padding:8px 12px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:var(--rs);color:var(--green);font-size:12px">Saving ${data.length} rows…</div>`;
+  setPill('busy',`Saving ${data.length} rows…`);
+  try{
+    // Send in batches of 200
+    const CHUNK=200;
+    for(let i=0;i<data.length;i+=CHUNK){
+      setPill('busy',`${Math.min(i+CHUNK,data.length)}/${data.length} saved…`);
+      await gasGet({action:'importAttendance',rows:data.slice(i,i+CHUNK)});
+    }
+    setPill('ok','Synced ✓');
+    document.getElementById('att-prev').innerHTML=`<div style="margin-top:8px;padding:8px 12px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:var(--rs);color:var(--green);font-size:12px">✓ ${data.length} rows saved to Database!</div>`;
+    toast('✓ '+data.length+' attendance rows saved','ok');
+  }catch(e){setPill('err','Error');toast('⚠ '+e.message,'err');}
+}
+function previewBox(count,label,lines,extra,confirmFn){
+  return`<div style="margin-top:10px;padding:12px;background:#f9fafb;border-radius:var(--rs);border:1px solid var(--border)">
+    <div style="font-weight:500;margin-bottom:8px;font-size:12px">Found ${count} ${label}</div>
+    <div style="max-height:120px;overflow-y:auto;font-size:11px;color:var(--muted)">
+      ${lines.map(l=>`<div style="padding:3px 0;border-bottom:1px solid #f3f4f6">${l}</div>`).join('')}
+      ${extra>0?`<div style="padding-top:4px">…and ${extra} more</div>`:''}
+    </div>
+    <div style="display:flex;gap:8px;margin-top:10px">
+      <button class="btn btn-p btn-sm" onclick="${confirmFn}">💾 Save to Database</button>
+      <button class="btn btn-sm" onclick="this.closest('div[style]').remove()">Cancel</button>
+    </div>
+  </div>`;
+}
+
+
+/* ══════════════════════════════════════════════════════════════
+   DAILY SHEET IMPORT — parse DEO attendance sheet text
+══════════════════════════════════════════════════════════════ */
+function initSheetImport(){
+  const el=document.getElementById('sheet-date');
+  if(el && !el.value) el.value=todayS();
+  syncSheetModeUI();
+}
+
+const SAMPLE_SHEET=`RS-4
+1  AMAN (H) MAND  9.00 AM  5.30 PM
+2  AKSHAY (H) MAND  9.00 AM
+3  SHIVA (H) MAND  9.00 AM
+4  RAMAYAN (H) MAND  9.00 AM
+
+AUTO DIE
+1  DOLAN (OP) COMP  9.10 AM
+2  RACHIT (H)COMP  9.00 AM
+3  KITTU (H)COMP  9.00 AM
+
+MANUAL STICTING
+1  RAHUL (OP) COMP  9.00 AM
+2  RAM BRIGE (OP) MAND  9.00 AM
+3  VIDHICHAND (H) MAND  9.00 AM
+
+ROLL CUTTING
+1  VIMAL SINGH (OP) COMP  9.10 AM
+2  RADHE SHYAM (H) COMP  9.00 AM
+3  SURENDER (H) COMP  9.00 AM
+
+MANUAL PESTING
+1  RAJIV(OP) COMP  9.10 AM
+2  SARVESH (OP) COMP  9.10 AM
+3  MUSAFIR (OP) MAND  9.00 AM
+
+LOADING
+1  MANDEEP VENDOR  9.00 AM
+2  AJAY (H) MAND  9.00 AM
+3  SATENDER (H) MAND  9.00 AM
+4  SAHIL (H) MAND  9.00 AM
+5  NARENDER (H) MAND  9.00 AM
+6  SATENDER JAATAV (H) MAND  9.00 AM
+
+BOARD PLANT
+1  KD SINGH (COMP)  9.00 AM
+2  ABHISHEK SINGH (COMP)  9.00 AM
+3  AAKASH KASHYAP (COMP)  9.00 AM
+4  VIVEK SINGH (COMP)  9.00 AM
+5  KULDEEP (OP) COMP  9.00 AM
+6  LALIT (COMP)  9.00 AM
+7  SHALESH (H) COMP  9.00 AM
+8  PARSHANT (H) COMP  9.00 AM
+9  MONU (H) COMP  9.00 AM
+10  ANMOL (H) COMP  9.00 AM
+
+DIE BREAKING
+1  KAMAL SINGH (H) COMP  9.00 AM
+2  ANIL NANDA (H) COMP  9.00 AM
+3  DEEPAK (H) COMP  9.00 AM
+4  ANGAD (H) COMP  9.10 AM
+
+FG
+1  ANIL (OP) COMP  9.27 AM
+2  SANOJ (H) COMP  9.00 AM
+3  DEEPU (H) COMP  9.00 AM
+4  RUPESH (H) COMP  9.10 AM
+
+SUP/FORKLIFTER/SWEEPER/PENTRY
+1  ANIL GUPTA SUP.  9.10 AM
+2  MAHESH FORKLIFTER  9.00 AM
+3  SANDEEP SUP.  9.27 AM
+4  JOGINDER PENTRY  9.10 AM
+
+STAFF
+1  BHARAT  8.45 AM
+2  RAVI SINGH  9.10 AM`;
+
+function loadSampleSheet(){
+  const mode=getSheetImportMode();
+  const sample = mode==='OUT'
+    ? SAMPLE_SHEET.replace(/(\d{1,2}[.:]\d{2}\s*(?:AM|PM))(\s+\d{1,2}[.:]\d{2}\s*(?:AM|PM))?/ig, (_,a,b)=> (b||a).trim())
+    : mode==='IN'
+    ? SAMPLE_SHEET.replace(/(\d{1,2}[.:]\d{2}\s*(?:AM|PM))(\s+\d{1,2}[.:]\d{2}\s*(?:AM|PM))?/ig, (_,a)=> a.trim())
+    : mode==='SIMPLE'
+    ? `ABHISHEK SINGH-(NEW) P 3\nAKASH KASHYAP P 0\nANIL A 4\nK.D. SINGH H 0`
+    : SAMPLE_SHEET;
+  document.getElementById('sheet-text').value=sample;
+  toast('Sample sheet loaded — click Parse & Preview','ok');
+}
+
+// Parse "9.00 AM" or "9:00 AM" or "9.27 AM" → "09:27"
+function parseTimeStr(str){
+  if(!str) return '';
+  const s=str.trim().toUpperCase();
+  const m=s.match(/(\d{1,2})[.:](\d{2})\s*(AM|PM)?/);
+  if(!m) return '';
+  let h=parseInt(m[1]),min=parseInt(m[2]);
+  const ampm=m[3]||'AM';
+  if(ampm==='PM' && h!==12) h+=12;
+  if(ampm==='AM' && h===12) h=0;
+  return String(h).padStart(2,'0')+':'+String(min).padStart(2,'0');
+}
+function calcWorkedHoursFromTimes(inTime='', outTime=''){
+  if(!inTime || !outTime) return 0;
+  const [ih,im]=inTime.split(':').map(Number);
+  const [oh,om]=outTime.split(':').map(Number);
+  if(!Number.isFinite(ih)||!Number.isFinite(im)||!Number.isFinite(oh)||!Number.isFinite(om)) return 0;
+  let start=ih*60+im, end=oh*60+om;
+  if(end<start) end+=24*60;
+  return round2((end-start)/60);
+}
+function applySheetDerivedValues(r){
+  const shift=r.matchedEmp?.shift||8;
+  const std=shift===12?(document.getElementById('std-in-12')?.value||'08:00'):(document.getElementById('std-in-8')?.value||'09:00');
+  const grace=parseInt(document.getElementById('grace-min')?.value||10);
+  r.inTime=r.inTime||'';
+  r.outTime=r.outTime||'';
+  r.workedHrs=calcWorkedHoursFromTimes(r.inTime,r.outTime);
+  let lateMin=0;
+  if(r.inTime){
+    const [ih,im]=r.inTime.split(':').map(Number);
+    const [sh,sm]=std.split(':').map(Number);
+    lateMin=(ih*60+im)-(sh*60+sm)-grace;
+  }
+  r.lateMin=lateMin;
+  return r;
+}
+function updateSheetPreviewTime(index, field, value){
+  if(!_sheetParsed[index]) return;
+  _sheetParsed[index][field]=value||'';
+  applySheetDerivedValues(_sheetParsed[index]);
+  renderSheetPreview();
+}
+
+// Fuzzy name matcher — strips suffixes like (H), (OP), COMP, MAND, SUP, NEW etc.
+function cleanName(raw){
+  return raw.toUpperCase()
+    .replace(/\s*\(H\)\s*/g,' ')
+    .replace(/\s*\(OP\)\s*/g,' ')
+    .replace(/\s*\(NEW\)\s*/g,' ')
+    .replace(/\bCOMP\b/g,'').replace(/\bMAND\b/g,'')
+    .replace(/\bSUP\.?\b/g,'').replace(/\bFORKLIFTER\b/g,'')
+    .replace(/\bPENTRY\b/g,'').replace(/\bPANTRY\b/g,'')
+    .replace(/\bSWEEPER\b/g,'').replace(/\bDRIVER\b/g,'')
+    .replace(/\bVENDOR\b/g,'').replace(/\bNEW\b/g,'')
+    .replace(/[-]/g,' ').replace(/\s+/g,' ').trim();
+}
+
+function nameScore(a,b){
+  const wa=cleanName(a).split(' ').filter(Boolean);
+  const wb=cleanName(b).split(' ').filter(Boolean);
+  let match=0;
+  wa.forEach(w=>{ if(wb.some(x=>x.startsWith(w)||w.startsWith(x))) match++; });
+  return match/Math.max(wa.length,wb.length,1);
+}
+
+function matchEmployee(rawName){
+  if(!EMPS.length) return null;
+  let best=null, bestScore=0;
+  EMPS.forEach(e=>{
+    const score=nameScore(rawName, e.name);
+    if(score>bestScore){ bestScore=score; best=e; }
+  });
+  return bestScore>=0.4 ? best : null;
+}
+
+function parseQuickAttendanceLine(line){
+  const cleaned=(line||'').trim().replace(/^\s*\d+[\s.)\-]+/,'').replace(/\s+/g,' ');
+  if(!cleaned) return null;
+  const m=cleaned.match(/^(.*?)(?:\s+|,)(P|A|H)(?:\s+|,)([-+]?\d+(?:\.\d+)?)\s*$/i)
+        || cleaned.match(/^(.*?)(?:\s+|,)(P|A|H)\s*$/i);
+  if(!m) return null;
+  return {
+    rawName:(m[1]||'').trim(),
+    importedStatus:(m[2]||'').toUpperCase(),
+    importedOt: round2(parseFloat(m[3]||0) || 0)
+  };
+}
+
+let _sheetParsed=[];
+function getSheetImportMode(){
+  return document.getElementById('sheet-import-mode')?.value || 'IN';
+}
+function syncSheetModeUI(){
+  const mode=getSheetImportMode();
+  const note=document.getElementById('sheet-mode-note');
+  const btn=document.getElementById('sheet-punch-btn');
+  const txt=document.getElementById('sheet-text');
+  if(note){
+    note.textContent = mode==='IN'
+      ? 'Current mode: IN punch only · unmatched staff will not be marked absent'
+      : mode==='OUT'
+      ? 'Current mode: OUT punch only · merges with saved IN time for the same date'
+      : mode==='SIMPLE'
+      ? 'Current mode: Quick P/A/OT import · use format like ABHISHEK P 3'
+      : 'Current mode: Full day import · can mark unmatched staff absent';
+  }
+  if(btn){
+    btn.textContent = mode==='IN'
+      ? '💾 Save IN Punches'
+      : mode==='OUT'
+      ? '💾 Save OUT Punches'
+      : mode==='SIMPLE'
+      ? '💾 Save Quick Attendance'
+      : '💾 Save Full Attendance';
+  }
+  if(txt){
+    txt.placeholder = mode==='OUT'
+      ? 'RS-4\n1  AMAN (H) MAND  5.30 PM\n2  AKSHAY (H) MAND  6.10 PM\n\nBOARD PLANT\n1  KD SINGH  5.45 PM\n2  ABHISHEK SINGH  5.30 PM\n...'
+      : mode==='FULL'
+      ? 'RS-4\n1  AMAN (H) MAND  9.00 AM  5.30 PM\n2  AKSHAY (H) MAND  9.05 AM  6.00 PM\n\nBOARD PLANT\n1  KD SINGH  9.00 AM  5.45 PM\n...'
+      : mode==='SIMPLE'
+      ? 'ABHISHEK SINGH-(NEW) P 3\nAKASH KASHYAP P 0\nANIL A 4\nK.D. SINGH H 0'
+      : 'RS-4\n1  AMAN (H) MAND  9.00 AM\n2  AKSHAY (H) MAND  9.05 AM\n\nBOARD PLANT\n1  KD SINGH  9.00 AM\n2  ABHISHEK SINGH  9.10 AM\n...';
+  }
+}
+
+function renderSheetPreview(){
+  const parsed=_sheetParsed||[];
+  const date=document.getElementById('sheet-date').value||todayS();
+  const lateOnes=parsed.filter(r=>r.lateMin>0);
+  const unmatched=parsed.filter(r=>!r.matchedEmp);
+
+  let rows='';
+  parsed.forEach((r,i)=>{
+    const workedHrs=r.workedHrs||0;
+    const statusTag=r.importedStatus
+      ? `<span class="badge ${r.importedStatus==='P'?'bp':r.importedStatus==='H'?'bh':'ba'}">${r.importedStatus==='P'?'Present':r.importedStatus==='H'?'Holiday':'Absent'}</span>${Number(r.importedOt||0)?` <span class="cm">· OT ${round2(r.importedOt)}h</span>`:''}`
+      : workedHrs>0
+      ? (()=>{ const calc=deriveAttendanceRule(r.matchedEmp?.shift||8, workedHrs, 'P'); return `<span class="badge ${calc.status==='P'?'bp':'ba'}">${calc.status==='P'?'Present':'Absent'}</span>`; })()
+      : '<span class="badge bp">Present</span>';
+    const punctTag=r.importedStatus
+      ? '<span class="badge bh">Quick Import</span>'
+      : r.inTime
+      ?(r.lateMin>0?`<span class="late-tag">⚠ Late ${r.lateMin}m</span>`:`<span class="ontime-tag">✓ On Time</span>`)
+      :'<span class="badge bh">No Time</span>';
+    const empCell=r.matchedEmp
+      ?`<span class="badge bp">${r.matchedEmp.name}</span>`
+      :`<span class="badge ba">❓ No Match</span>`;
+    rows+=`<tr style="${r.lateMin>0?'background:#fffbf0':''}">
+      <td class="cm">${i+1}</td>
+      <td style="font-weight:500">${r.rawName}</td>
+      <td class="cm">${r.section}</td>
+      <td><input type="time" class="time-inp" value="${r.inTime||''}" onchange="updateSheetPreviewTime(${i},'inTime',this.value)"></td>
+      <td><input type="time" class="time-inp" value="${r.outTime||''}" onchange="updateSheetPreviewTime(${i},'outTime',this.value)"></td>
+      <td class="mono">${workedHrs>0?workedHrs.toFixed(2):'—'}</td>
+      <td>${statusTag}</td>
+      <td>${punctTag}</td>
+      <td>${empCell}</td>
+    </tr>`;
+  });
+  document.getElementById('sheet-preview-body').innerHTML=rows;
+  document.getElementById('sheet-preview-title').textContent=`${parsed.length} entries found for ${date} · ${lateOnes.length} late · ${unmatched.length} unmatched`;
+  document.getElementById('sheet-preview-card').style.display='block';
+
+  document.getElementById('sheet-stats').innerHTML=`
+    <div class="ist"><span class="sdot" style="background:var(--green)"></span><span class="n">${parsed.length}</span>&nbsp;Total</div>
+    <div class="ist"><span class="sdot" style="background:#f59e0b"></span><span class="n" style="color:#d97706">${lateOnes.length}</span>&nbsp;Late</div>
+    <div class="ist"><span class="sdot" style="background:var(--green)"></span><span class="n" style="color:var(--green)">${parsed.length-lateOnes.length}</span>&nbsp;On Time</div>
+    <div class="ist"><span class="sdot" style="background:var(--red)"></span><span class="n" style="color:var(--red)">${unmatched.length}</span>&nbsp;Unmatched</div>
+  `;
+
+  const alertEl=document.getElementById('late-alert');
+  if(lateOnes.length){
+    alertEl.style.display='block';
+    alertEl.innerHTML=`<strong>⚠ ${lateOnes.length} Late Comer${lateOnes.length>1?'s':''} Today:</strong> `+lateOnes.map(r=>`<span style="margin:0 4px">${r.rawName} (+${r.lateMin}m)</span>`).join(' · ');
+  } else {
+    alertEl.style.display='none';
+  }
+
+  if(lateOnes.length||unmatched.length){
+    const combined=[...new Map([...lateOnes,...unmatched].map(r=>[r.rawName,r])).values()];
+    document.getElementById('late-report-body').innerHTML=combined.map(r=>`<tr>
+      <td style="font-weight:500">${r.rawName}</td>
+      <td class="cm">${r.section}</td>
+      <td class="mono">${r.inTime||'—'}</td>
+      <td class="mono">${r.outTime||'—'}</td>
+      <td>${r.lateMin>0?`<span class="late-tag">+${r.lateMin}m</span>`:'—'}</td>
+      <td>${r.matchedEmp?`<span class="badge bp">${r.matchedEmp.name}</span>`:'<span class="badge ba">Not Matched</span>'}</td>
+    </tr>`).join('');
+    document.getElementById('late-report-card').style.display='block';
+  } else {
+    document.getElementById('late-report-card').style.display='none';
+  }
+}
+
+function parseAndPreviewSheet(){
+  const text=document.getElementById('sheet-text').value.trim();
+  if(!text){ toast('⚠ Paste the daily sheet text first','err'); return; }
+  const date=document.getElementById('sheet-date').value||todayS();
+  const mode=getSheetImportMode();
+  const dayAtt=da(date);
+
+  const lines=text.split('\n');
+  let section='GENERAL';
+  const parsed=[];
+
+  const timeRx=/\d{1,2}[.:]\d{2}\s*(AM|PM)/i;
+  const numLineRx=/^\s*\d+[\s.)\-]+/;
+  const allTimeRx=/(\d{1,2}[.:]\d{2}\s*(?:AM|PM)?)/ig;
+
+  lines.forEach(line=>{
+    const l=line.trim();
+    if(!l) return;
+
+    if(mode==='SIMPLE'){
+      const simple=parseQuickAttendanceLine(l);
+      if(!simple) return;
+      const matchedEmp=matchEmployee(simple.rawName);
+      const existing=(matchedEmp && dayAtt[matchedEmp.id]) ? dayAtt[matchedEmp.id] : {};
+      const baseWorked=simple.importedStatus==='P' ? (matchedEmp?.shift||8) : 0;
+      parsed.push(applySheetDerivedValues({
+        rawName:simple.rawName,
+        section:'QUICK IMPORT',
+        inTime:existing.in_time||'',
+        outTime:existing.out_time||'',
+        matchedEmp,
+        date,
+        mode,
+        existing,
+        importedStatus:simple.importedStatus,
+        importedOt:simple.importedOt,
+        workedHrs:baseWorked
+      }));
+      parsed[parsed.length-1].workedHrs=baseWorked;
+      return;
+    }
+
+    if(!numLineRx.test(l) && !timeRx.test(l)){
+      section=l.toUpperCase();
+      return;
+    }
+
+    const timeMatches=[...l.matchAll(allTimeRx)].map(m=>m[1]);
+    const nameRaw=l.replace(/^\s*\d+[\s.)\-]+/,'').replace(allTimeRx,'').trim().replace(/\s+/g,' ');
+    if(!nameRaw) return;
+
+    const matchedEmp=matchEmployee(nameRaw);
+    const existing=(matchedEmp && dayAtt[matchedEmp.id]) ? dayAtt[matchedEmp.id] : {};
+    let inTime='', outTime='';
+
+    if(mode==='IN'){
+      inTime = timeMatches[0] ? parseTimeStr(timeMatches[0]) : (existing.in_time||'');
+      outTime = existing.out_time || '';
+    }else if(mode==='OUT'){
+      inTime = existing.in_time || '';
+      outTime = timeMatches.length ? parseTimeStr(timeMatches[timeMatches.length-1]) : (existing.out_time||'');
+    }else{
+      inTime = timeMatches[0] ? parseTimeStr(timeMatches[0]) : (existing.in_time||'');
+      outTime = timeMatches[1] ? parseTimeStr(timeMatches[timeMatches.length-1]) : (existing.out_time||'');
+    }
+
+    parsed.push(applySheetDerivedValues({
+      rawName:nameRaw,
+      section,
+      inTime,
+      outTime,
+      matchedEmp,
+      date,
+      mode,
+      existing
+    }));
+  });
+
+  _sheetParsed=parsed;
+  renderSheetPreview();
+  const lateOnes=parsed.filter(r=>r.lateMin>0);
+  const msg = mode==='SIMPLE'
+    ? `✓ Parsed ${parsed.length} quick attendance lines`
+    : `✓ Parsed ${parsed.length} entries in ${mode} mode · ${lateOnes.length} late comers`;
+  toast(msg,'ok');
+}
+
+async function punchSheetAttendance(){
+  if(!_sheetParsed.length){ toast('⚠ Parse the sheet first','err'); return; }
+  const date=document.getElementById('sheet-date').value||todayS();
+  const mode=getSheetImportMode();
+  const matched=_sheetParsed.filter(r=>r.matchedEmp);
+  if(!matched.length){ toast('⚠ No matched employees to punch','err'); return; }
+
+  if(!ATTS[date]) ATTS[date]={};
+  const rows=[];
+
+  if(mode==='FULL'){
+    EMPS.forEach(e=>{
+      if(!ATTS[date][e.id]) ATTS[date][e.id]={status:'A',in_time:'',out_time:'',ot:0,hrs:0};
+    });
+  }
+
+  matched.forEach(r=>{
+    const e=r.matchedEmp;
+    const existing=ATTS[date][e.id]||{status:'A',in_time:'',out_time:'',ot:0,hrs:0};
+    let finalIn=existing.in_time||'';
+    let finalOut=existing.out_time||'';
+    let finalStatus=existing.status||'A';
+    let finalHrs=round2(existing.hrs||0);
+    let finalOt=round2(existing.ot||0);
+
+    if(mode==='IN'){
+      finalIn=r.inTime||finalIn||defaultInTime(e.shift);
+      if(finalIn && finalOut){
+        const hrs=calcWorkedHoursFromTimes(finalIn, finalOut);
+        const calc=deriveAttendanceRule(e.shift, hrs, 'P');
+        finalStatus=calc.status; finalHrs=calc.hrs; finalOt=calc.ot;
+      }else if(finalIn){
+        finalStatus='P'; finalHrs=0; finalOt=0;
+      }
+    }else if(mode==='OUT'){
+      finalIn=r.inTime||finalIn||'';
+      finalOut=r.outTime||finalOut||'';
+      if(finalIn && finalOut){
+        const hrs=calcWorkedHoursFromTimes(finalIn, finalOut);
+        const calc=deriveAttendanceRule(e.shift, hrs, 'P');
+        finalStatus=calc.status; finalHrs=calc.hrs; finalOt=calc.ot;
+      }else if(finalOut){
+        finalStatus='P'; finalHrs=0; finalOt=0;
+      }
+    }else if(mode==='SIMPLE'){
+      finalStatus=r.importedStatus||'A';
+      finalOt=round2(r.importedOt||0);
+      finalHrs=finalStatus==='P' ? e.shift : 0;
+      finalIn=existing.in_time||'';
+      finalOut=existing.out_time||'';
+    }else{
+      finalIn=r.inTime||finalIn||defaultInTime(e.shift);
+      const enteredHrs=calcWorkedHoursFromTimes(finalIn, r.outTime||'');
+      if(enteredHrs>0){
+        const calc=deriveAttendanceRule(e.shift, enteredHrs, 'P');
+        finalStatus=calc.status; finalHrs=calc.hrs; finalOt=calc.ot;
+        finalOut=r.outTime||computeTimeRange(finalHrs, finalIn).out;
+      }else{
+        const baseHrs=e.shift;
+        const calc=deriveAttendanceRule(e.shift, baseHrs, 'P');
+        const auto=computeTimeRange(calc.hrs, finalIn);
+        finalStatus=calc.status; finalHrs=calc.hrs; finalOt=calc.ot;
+        finalOut=r.outTime||auto.out;
+      }
+    }
+
+    ATTS[date][e.id]={status:finalStatus,in_time:finalIn,out_time:finalOut,ot:finalOt,hrs:finalHrs};
+    rows.push({employee_id:e.id,employee_name:e.name,date,status:finalStatus,
+      in_time:finalIn,out_time:finalOut,total_hours:finalHrs,ot_hours:finalOt});
+  });
+
+  if(mode==='FULL'){
+    const matchedIds=new Set(matched.map(r=>r.matchedEmp.id));
+    EMPS.forEach(e=>{
+      if(!matchedIds.has(e.id)){
+        rows.push({employee_id:e.id,employee_name:e.name,date,status:'A',
+          in_time:'',out_time:'',total_hours:0,ot_hours:0});
+        ATTS[date][e.id]={status:'A',in_time:'',out_time:'',ot:0,hrs:0};
+      }
+    });
+  }
+
+  const dedupedMap=new Map();
+  rows.forEach(r=>{
+    const key=`${r.employee_id}__${r.date}`;
+    dedupedMap.set(key, r);
+  });
+  const dedupedRows=[...dedupedMap.values()];
+  const duplicateCount=rows.length-dedupedRows.length;
+
+  setPill('busy','Saving attendance…');
+  try{
+    const CHUNK=200;
+    for(let i=0;i<dedupedRows.length;i+=CHUNK){
+      await gasGet({action:'saveAttendance',rows:dedupedRows.slice(i,i+CHUNK)});
+    }
+    setPill('ok','Synced ✓');
+    EDITS={};
+    renderDashboard(); renderPayroll(); renderOT(); renderReports(); renderAtt();
+    const label = mode==='IN' ? 'IN punches' : mode==='OUT' ? 'OUT punches' : mode==='SIMPLE' ? 'quick attendance' : 'full attendance';
+    const dedupeNote = duplicateCount>0 ? ` · ${duplicateCount} duplicate sheet line(s) merged` : '';
+    toast(`✓ Saved ${label} for ${dedupedRows.length} employees on ${date}${dedupeNote}`,'ok');
+  }catch(e){setPill('err','Error');toast('⚠ '+e.message,'err');}
+}
+
+
+window.addEventListener('error', (ev) => {
+  console.error('Script error:', ev.error?.message || ev.message);
+});
+window.addEventListener('unhandledrejection', (ev) => {
+  const msg = ev.reason?.message || String(ev.reason || '');
+  if(!msg.includes('timed out') && !msg.includes('supabase') && !msg.includes('Supabase')){
+    toast('⚠ ' + msg, 'err');
+  }
+});
+
+/* ══════════════════════════════════════════════════════════════
+   INIT
+══════════════════════════════════════════════════════════════ */
+document.getElementById('att-date').value=todayS();
+document.getElementById('pay-month').value=new Date().toISOString().slice(0,7);
+document.getElementById('ot-month').value=new Date().toISOString().slice(0,7);
+syncSheetModeUI();
+boot();
+</script>
+
+<!--
+╔══════════════════════════════════════════════════════════════╗
+║         SUPABASE SETUP — SQL NOTES                          ║
+║                                                              ║
+║  1. Open Supabase → SQL Editor                               ║
+║  2. Run the SQL from the companion file:                     ║
+║     jhajjar_payroll_supabase_schema.sql                      ║
+║  3. Paste your publishable / anon key into SUPABASE_KEY      ║
+║  4. Keep the table names below or update TABLES in the HTML  ║
+║                                                              ║
+║  Tables expected by this file:                               ║
+║    employees, attendance, advances, snacks                   ║
+║                                                              ║
+║  Important: attendance needs UNIQUE(employee_id, date)       ║
+║             advances needs UNIQUE(employee_id, month)        ║
+╚══════════════════════════════════════════════════════════════╝
+-->
+</body>
+</html>
