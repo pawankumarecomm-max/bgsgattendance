@@ -2617,5 +2617,538 @@ boot();
 ║             advances needs UNIQUE(employee_id, month)        ║
 ╚══════════════════════════════════════════════════════════════╝
 -->
+
+<script>
+(function(){
+  const LIVE_LOGIN_KEY = 'bgsg_multi_unit_live_user_v1';
+  const DEFAULT_UNIT = 'Jhajjar Unit 1';
+  const LIVE_UNITS = ['Jhajjar Unit 1','Bangalore','EPW Unit 2'];
+  const LIVE_USERS = [
+    {key:'md', username:'md', password:'md123', name:'MD User', role:'md_admin', unit:'ALL'},
+    {key:'jhajjar', username:'jhajjar', password:'jh123', name:'Jhajjar User', role:'unit_user', unit:'Jhajjar Unit 1'},
+    {key:'bangalore', username:'bangalore', password:'bn123', name:'Bangalore User', role:'unit_user', unit:'Bangalore'},
+    {key:'epw', username:'epw', password:'epw123', name:'EPW User', role:'unit_user', unit:'EPW Unit 2'}
+  ];
+
+  const LIVE_STATE = { currentUser:null, mdScope:'ALL', fullData:null };
+  const esc = s => String(s ?? '').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+  const normalizeUnit = v => String(v || '').trim() || DEFAULT_UNIT;
+  const isMdAll = ()=> !!LIVE_STATE.currentUser && LIVE_STATE.currentUser.role==='md_admin' && LIVE_STATE.mdScope==='ALL';
+  const currentScope = ()=>{
+    if(!LIVE_STATE.currentUser) return [];
+    if(LIVE_STATE.currentUser.role==='md_admin') return LIVE_STATE.mdScope==='ALL' ? [...LIVE_UNITS] : [LIVE_STATE.mdScope];
+    return [LIVE_STATE.currentUser.unit];
+  };
+  const formatINR = n => '₹' + Math.round(Number(n||0)).toLocaleString('en-IN');
+
+  function injectLiveStyle(){
+    if(document.getElementById('live-auth-style')) return;
+    const st = document.createElement('style');
+    st.id = 'live-auth-style';
+    st.textContent = `
+      #live-login-overlay{position:fixed;inset:0;display:none;align-items:center;justify-content:center;z-index:100000;background:linear-gradient(135deg,#0f172a,#111827 45%,#1f2937)}
+      .live-login-card{width:min(420px,calc(100vw - 32px));background:#fff;border:1px solid #e5e7eb;border-radius:18px;box-shadow:0 28px 80px rgba(0,0,0,.38);overflow:hidden}
+      .live-login-head{padding:22px 24px 14px;background:linear-gradient(135deg,#141720,#0f172a);color:#fff}
+      .live-login-head .t1{font-size:18px;font-weight:600;letter-spacing:.2px}
+      .live-login-head .t2{font-size:11px;color:#94a3b8;margin-top:4px}
+      .live-login-body{padding:24px}
+      .live-field{margin-bottom:14px}
+      .live-field input{height:42px;border-radius:10px;padding:10px 12px;font-size:13px}
+      .live-login-btn{width:100%;height:42px;border:none;border-radius:10px;background:linear-gradient(135deg,#f5a623,#f97316);color:#000;font-weight:700;font-family:inherit;font-size:13px;cursor:pointer}
+      .live-login-btn:hover{opacity:.92}
+      .live-login-error{display:none;margin-top:10px;padding:9px 11px;background:#fef2f2;border:1px solid #fecaca;border-radius:10px;color:#b91c1c;font-size:11px}
+      .live-login-brand{display:flex;align-items:center;gap:12px;margin-bottom:18px}
+      .live-login-icon{width:46px;height:46px;border-radius:12px;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#f5a623,#f97316);font-size:20px}
+      .logout-side{margin-left:auto;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.04);color:#e8eaf0;border-radius:8px;padding:6px 10px;font-size:11px;cursor:pointer;font-family:inherit}
+      .logout-side:hover{background:rgba(255,255,255,.08)}
+      .scope-pill{display:none;align-items:center;gap:8px;padding:4px 10px;border:1px solid var(--border);border-radius:999px;background:#fff;font-size:12px;color:var(--muted)}
+      .scope-pill select{width:155px;padding:4px 10px;border-radius:999px}
+      .unit-subline{display:block;font-size:10px;color:var(--muted);margin-top:2px}
+    `;
+    document.head.appendChild(st);
+  }
+
+  function injectLiveLogin(){
+    if(document.getElementById('live-login-overlay')) return;
+    const overlay = document.createElement('div');
+    overlay.id = 'live-login-overlay';
+    overlay.innerHTML = `
+      <div class="live-login-card">
+        <div class="live-login-head">
+          <div class="t1">Payroll Manager</div>
+          
+        </div>
+        <div class="live-login-body">
+          <div class="live-login-brand">
+            <div class="live-login-icon">🏭</div>
+            <div>
+              <div style="font-size:15px;font-weight:600;color:#111827">BGSG Software Login</div>
+            </div>
+          </div>
+          <div class="live-field">
+            <label>Username</label>
+            <input id="live-login-username" autocomplete="username">
+          </div>
+          <div class="live-field">
+            <label>Password</label>
+            <input id="live-login-password" type="password" autocomplete="current-password">
+          </div>
+          <button class="live-login-btn" onclick="liveDoLogin()">Login</button>
+          <div id="live-login-error" class="live-login-error">Invalid username or password.</div>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+  }
+
+  function ensureChrome(){
+    const topbarR = document.querySelector('.topbar-r');
+    if(topbarR && !document.getElementById('md-scope-wrap')){
+      const wrap = document.createElement('div');
+      wrap.id = 'md-scope-wrap';
+      wrap.className = 'scope-pill';
+      wrap.innerHTML = `Scope <select id="md-scope-select">` +
+        `<option value="ALL">All Units</option>` +
+        LIVE_UNITS.map(u=>`<option value="${esc(u)}">${esc(u)}</option>`).join('') +
+        `</select>`;
+      topbarR.insertBefore(wrap, topbarR.firstChild);
+      wrap.querySelector('select').addEventListener('change', e=>{ LIVE_STATE.mdScope = e.target.value; boot(false); });
+    }
+
+    const userRow = document.querySelector('.u-row');
+    if(userRow && !document.getElementById('sidebar-logout-btn')){
+      const btn = document.createElement('button');
+      btn.id = 'sidebar-logout-btn';
+      btn.className = 'logout-side';
+      btn.textContent = 'Logout';
+      btn.onclick = logoutUser;
+      userRow.appendChild(btn);
+    }
+  }
+
+  function showLiveLogin(){
+    const el = document.getElementById('live-login-overlay');
+    if(el) el.style.display = 'flex';
+    const err = document.getElementById('live-login-error');
+    if(err) err.style.display = 'none';
+    setTimeout(()=>document.getElementById('live-login-username')?.focus(), 20);
+  }
+  function hideLiveLogin(){ const el = document.getElementById('live-login-overlay'); if(el) el.style.display='none'; }
+
+  function applyChrome(){
+    ensureChrome();
+    const mainLabel = LIVE_STATE.currentUser.role==='md_admin' ? 'MD View' : LIVE_STATE.currentUser.unit;
+    const head = document.querySelector('.s-title strong');
+    if(head) head.textContent = mainLabel;
+    const foot = document.querySelector('.u-info strong');
+    if(foot) foot.textContent = LIVE_STATE.currentUser.name;
+    const badge = document.querySelector('.u-av');
+    if(badge) badge.textContent = LIVE_STATE.currentUser.role==='md_admin' ? 'MD' : (LIVE_STATE.currentUser.unit.match(/[A-Z]/g)||LIVE_STATE.currentUser.unit.split(' ').map(x=>x[0])).join('').slice(0,2).toUpperCase();
+    const scopeWrap = document.getElementById('md-scope-wrap');
+    if(scopeWrap) scopeWrap.style.display = LIVE_STATE.currentUser.role==='md_admin' ? 'inline-flex' : 'none';
+    const scopeSel = document.getElementById('md-scope-select');
+    if(scopeSel) scopeSel.value = LIVE_STATE.mdScope;
+    const addBtn = document.querySelector('.btn-add');
+    if(addBtn) addBtn.textContent = '+ Add Employee';
+  }
+
+  window.fillLiveLogin = function(u,p){
+    document.getElementById('live-login-username').value = u;
+    document.getElementById('live-login-password').value = p;
+  };
+
+  window.liveDoLogin = function(){
+    const username = (document.getElementById('live-login-username').value || '').trim().toLowerCase();
+    const password = document.getElementById('live-login-password').value || '';
+    const user = LIVE_USERS.find(x=>x.username.toLowerCase()===username && x.password===password);
+    if(!user){
+      const err = document.getElementById('live-login-error');
+      if(err) err.style.display = 'block';
+      return;
+    }
+    LIVE_STATE.currentUser = user;
+    LIVE_STATE.mdScope = user.role==='md_admin' ? 'ALL' : user.unit;
+    localStorage.setItem(LIVE_LOGIN_KEY, user.key);
+    hideLiveLogin();
+    boot(false);
+  };
+
+  function logoutUser(){
+    localStorage.removeItem(LIVE_LOGIN_KEY);
+    LIVE_STATE.currentUser = null;
+    LIVE_STATE.mdScope = 'ALL';
+    showLiveLogin();
+    setPill('busy','Login required');
+  }
+  window.logoutUser = logoutUser;
+
+  function scopedEmployeesRows(data){
+    return (data.employees || []).filter(r=> currentScope().includes(normalizeUnit(r.unit_name || r.unit))); 
+  }
+  function scopedAttendanceRows(data){
+    return (data.attendance || []).filter(r=> currentScope().includes(normalizeUnit(r.unit_name || r.unit))); 
+  }
+  function scopedAdvanceRows(data){
+    return (data.advances || []).filter(r=> currentScope().includes(normalizeUnit(r.unit_name || r.unit))); 
+  }
+  function scopedMealRows(data){
+    return (data.meal_logs || []).filter(r=> currentScope().includes(normalizeUnit(r.unit_name || r.unit))); 
+  }
+
+  function parseScoped(data){
+    LIVE_STATE.fullData = data;
+    const empRows = scopedEmployeesRows(data);
+    const attRows = scopedAttendanceRows(data);
+    const advRows = scopedAdvanceRows(data);
+    const mealRows = scopedMealRows(data);
+
+    EMPS = empRows
+      .filter(r=>(String(r.status||'ACTIVE')).toUpperCase()==='ACTIVE' && r.name)
+      .map(r=>({
+        id:+r.id,
+        name:String(r.name).trim(),
+        dept:String(r.department||'').trim(),
+        pos:String(r.position||'').trim(),
+        salary:+r.salary||0,
+        shift:+r.shift||8,
+        unit:normalizeUnit(r.unit_name || r.unit)
+      }));
+
+    ATTS = {};
+    attRows.forEach(r=>{
+      const d=String(r.date||r.log_date||'').slice(0,10).trim(); if(!d) return;
+      if(!ATTS[d]) ATTS[d] = {};
+      ATTS[d][+r.employee_id] = {
+        status:String(r.status||'A').toUpperCase(),
+        in_time:String(r.in_time||'').trim(),
+        out_time:String(r.out_time||'').trim(),
+        ot:+r.ot_hours||0,
+        hrs:+r.total_hours||0,
+        unit:normalizeUnit(r.unit_name || r.unit)
+      };
+    });
+
+    ADVS = {};
+    advRows.forEach(r=>{
+      const mo = String(r.month||'').trim(); if(!mo) return;
+      if(!ADVS[mo]) ADVS[mo] = {};
+      ADVS[mo][+r.employee_id] = +r.amount || 0;
+    });
+
+    const s = data.snacks || {};
+    const rawDinner = +s.evening;
+    SNK = {tea:+s.morning||10, snacks:+s.snacks||20, dinner:(rawDinner && rawDinner!==5)?rawDinner:80};
+    const teaEl=document.getElementById('t-m'); if(teaEl) teaEl.value=SNK.tea;
+    const snackEl=document.getElementById('t-s'); if(snackEl) snackEl.value=SNK.snacks;
+    const dinnerEl=document.getElementById('t-d'); if(dinnerEl) dinnerEl.value=SNK.dinner;
+
+    MEALS = {};
+    mealRows.forEach(r=>{
+      const d = String(r.log_date || r.date || '').slice(0,10); if(!d) return;
+      if(!MEALS[d]) MEALS[d] = {tea:0, snacks:0, dinner:0};
+      MEALS[d].tea += +r.tea || 0;
+      MEALS[d].snacks += +r.snacks || 0;
+      MEALS[d].dinner += +r.dinner || 0;
+    });
+  }
+
+  const _oldGetAll = getAllFromSupabase;
+  getAllFromSupabase = async function(){
+    const base = await _oldGetAll();
+    let mealLogs = [];
+    try{
+      mealLogs = await sb(getSupabase().from('meal_logs').select('*').order('log_date', {ascending:true}), 'Load meal logs');
+    }catch(_){ mealLogs = []; }
+    return { ...base, meal_logs: Array.isArray(mealLogs) ? mealLogs : [] };
+  };
+
+  const _oldGasGet = gasGet;
+  gasGet = async function(params){
+    const action = params.action;
+    if(action === 'addEmployee'){
+      assertSupabaseReady();
+      const row = empRow(params);
+      row.unit_name = normalizeUnit(params.unit_name || params.unit || DEFAULT_UNIT);
+      await sb(getSupabase().from(TABLES.EMP).upsert([row], { onConflict:'id' }), 'Add employee');
+      return {ok:true};
+    }
+    if(action === 'saveAttendance'){
+      assertSupabaseReady();
+      const rows = (Array.isArray(params.rows)?params.rows:[]).map(r=>{ const x = attRow(r); x.unit_name = normalizeUnit(r.unit_name || r.unit || DEFAULT_UNIT); return x; });
+      if(rows.length) await sb(getSupabase().from(TABLES.ATT).upsert(rows, { onConflict:'employee_id,date' }), 'Save attendance');
+      return {saved: rows.length};
+    }
+    if(action === 'saveAdvance'){
+      assertSupabaseReady();
+      const row = advRow(params);
+      row.unit_name = normalizeUnit(params.unit_name || params.unit || DEFAULT_UNIT);
+      await sb(getSupabase().from(TABLES.ADV).upsert([row], { onConflict:'employee_id,month' }), 'Save advance');
+      return {ok:true};
+    }
+    if(action === 'saveMealLog'){
+      assertSupabaseReady();
+      const row = {
+        unit_name: normalizeUnit(params.unit_name || params.unit || DEFAULT_UNIT),
+        log_date: String(params.log_date || params.date || '').slice(0,10),
+        tea: Number(params.tea||0),
+        snacks: Number(params.snacks||0),
+        dinner: Number(params.dinner||0)
+      };
+      await sb(getSupabase().from('meal_logs').upsert([row], { onConflict:'unit_name,log_date' }), 'Save meal log');
+      return {ok:true};
+    }
+    if(action === 'deleteEmployee' && LIVE_STATE.currentUser?.role !== 'md_admin') throw new Error('Only MD can delete employees.');
+    return _oldGasGet(params);
+  };
+
+  boot = async function(silent=false){
+    if(!LIVE_STATE.currentUser){ showLiveLogin(); return; }
+    try{
+      setPill('busy','Loading…');
+      const data = await getAllFromSupabase();
+      parseScoped(data);
+      applyChrome();
+      updateCounts(); renderDashboard(); renderEmpTable(); renderAtt(); renderPayroll(); renderOT(); renderReports();
+      setPill('ok','Synced ✓');
+      if(!silent) toast('✓ Live multi-unit loaded','ok');
+    }catch(e){
+      setPill('err','Error');
+      toast('⚠ ' + e.message + ' — run migration SQL first if this is first setup','err');
+      console.error(e);
+    }
+  };
+
+  updateCounts = function(){
+    const n = EMPS.length;
+    const countEl = document.getElementById('s-cnt');
+    if(countEl){
+      const scopeLabel = LIVE_STATE.currentUser?.role==='md_admin' ? (LIVE_STATE.mdScope==='ALL' ? 'All units' : LIVE_STATE.mdScope) : LIVE_STATE.currentUser?.unit || DEFAULT_UNIT;
+      countEl.textContent = '● ' + scopeLabel + ' · ' + n + ' Employees';
+    }
+    const empLbl=document.getElementById('emp-lbl');
+    if(empLbl) empLbl.textContent = LIVE_STATE.currentUser?.role==='md_admin' ? (LIVE_STATE.mdScope==='ALL' ? 'All units staff' : LIVE_STATE.mdScope + ' staff') : n + ' staff';
+  };
+
+  function globalNextEmployeeId(){
+    const rows = LIVE_STATE.fullData?.employees || [];
+    return rows.length ? Math.max(...rows.map(r=>Number(r.id)||0)) + 1 : 1;
+  }
+
+  addEmployee = async function(){
+    const name=document.getElementById('en').value.trim().toUpperCase();
+    if(!name){toast('⚠ Enter name','err');return;}
+    const dept=document.getElementById('ed').value.trim();
+    const pos=document.getElementById('ep').value.trim().toUpperCase();
+    const sal=+document.getElementById('es').value||0,shift=+document.getElementById('esh').value;
+    const unit = LIVE_STATE.currentUser.role==='md_admin' ? (LIVE_STATE.mdScope==='ALL' ? DEFAULT_UNIT : LIVE_STATE.mdScope) : LIVE_STATE.currentUser.unit;
+    const id = globalNextEmployeeId();
+    setPill('busy','Saving…');
+    await gasGet({action:'addEmployee',id,name,department:dept,position:pos,salary:sal,shift,status:'ACTIVE',unit_name:unit});
+    document.getElementById('add-form').classList.remove('open');
+    ['en','ed','ep','es'].forEach(x=>document.getElementById(x).value='');
+    await boot(true);
+    toast('✓ ' + name + ' saved in ' + unit, 'ok');
+  };
+
+  delEmp = async function(id,name){
+    if(LIVE_STATE.currentUser?.role !== 'md_admin'){ toast('Only MD can delete','err'); return; }
+    if(!confirm('Remove '+name+'?')) return;
+    setPill('busy','Removing…');
+    await gasGet({action:'deleteEmployee',id});
+    await boot(true);
+    toast('✓ Removed','ok');
+  };
+
+  saveAtt = async function(){
+    const date=document.getElementById('att-date').value;
+    if(!date){toast('⚠ Select a date','err');return;}
+    if(!Object.keys(EDITS).length){toast('No changes to save');return;}
+    if(!ATTS[date])ATTS[date]={};
+    const rows=[];
+    EMPS.forEach(e=>{
+      const ed=EDITS[e.id]; if(!ed) return;
+      const inInp=document.getElementById('in-inp-'+e.id);
+      const outInp=document.getElementById('out-inp-'+e.id);
+      if(inInp && inInp.value) ed.in_time=inInp.value;
+      if(outInp && outInp.value) ed.out_time=outInp.value;
+      const r={status: ed.status||'A', in_time: ed.in_time||'', out_time: ed.out_time||'', ot: round2(ed.ot), hrs: round2(ed.hrs)};
+      if(r.status==='H'){ r.in_time=''; r.out_time=''; r.ot=0; r.hrs=0; }
+      else{ const auto=computeTimeRange(r.hrs, r.in_time||defaultInTime(e.shift)); r.in_time=auto.in; r.out_time=auto.out; r.hrs=auto.hrs; }
+      ATTS[date][e.id]=r;
+      rows.push({employee_id:e.id,employee_name:e.name,date,status:r.status,in_time:r.in_time,out_time:r.out_time,total_hours:r.hrs,ot_hours:r.ot,unit_name:e.unit||DEFAULT_UNIT});
+    });
+    setPill('busy',`Saving ${rows.length} rows…`);
+    await gasGet({action:'saveAttendance',rows});
+    ATT_DIRTY=false; EDITS={};
+    await boot(true);
+    toast(`✓ Attendance saved for ${date}`,'ok');
+  };
+
+  setAdv = async function(mo,eid,name,val){
+    const unit = (EMPS.find(e=>e.id===eid)?.unit) || (LIVE_STATE.currentUser?.unit) || DEFAULT_UNIT;
+    if(!ADVS[mo]) ADVS[mo] = {};
+    ADVS[mo][eid] = num(val);
+    await gasGet({action:'saveAdvance',month:mo,employee_id:eid,employee_name:name,amount:num(val),unit_name:unit});
+    renderPayroll();
+  };
+
+  saveMealStore = function(){};
+  saveMealEntry = async function(){
+    const date=document.getElementById('meal-date').value || todayS();
+    const unit = LIVE_STATE.currentUser.role==='md_admin' ? (LIVE_STATE.mdScope==='ALL' ? '' : LIVE_STATE.mdScope) : LIVE_STATE.currentUser.unit;
+    if(!unit){ toast('Select one unit in MD scope before saving food entry','err'); return; }
+    setPill('busy','Saving food…');
+    await gasGet({action:'saveMealLog',log_date:date,unit_name:unit,tea:+(document.getElementById('meal-tea').value||0),snacks:+(document.getElementById('meal-snacks').value||0),dinner:+(document.getElementById('meal-dinner').value||0)});
+    await boot(true);
+    toast('✓ Daily food entry saved for ' + unit,'ok');
+  };
+
+  getDepartmentCostData = function(date=todayS()){
+    const groups = new Map();
+    EMPS.forEach(emp=>{
+      const key = isMdAll() ? (emp.unit || DEFAULT_UNIT) : normalizeDepartment(emp.dept);
+      const cost = dailyEmployeeCost(emp, date);
+      if(!groups.has(key)) groups.set(key,{department:key,employees:[],salary:0,ot:0,total:0,present:0,absent:0,holiday:0});
+      const g = groups.get(key);
+      const rec=(ATTS[date]||{})[emp.id]||{status:'A',ot:0,hrs:0};
+      const row={
+        id:emp.id,name:emp.name,position:emp.pos,shift:emp.shift,unit:emp.unit,
+        salaryCost:cost.salaryCost,otHours:cost.otHours,otCost:cost.otCost,totalCost:cost.totalCost,status:cost.status
+      };
+      g.employees.push(row); g.salary += cost.salaryCost; g.ot += cost.otCost; g.total += cost.totalCost;
+      if(cost.status==='P') g.present++; else if(cost.status==='H') g.holiday++; else g.absent++;
+    });
+    return [...groups.values()];
+  };
+
+  renderDashboardDeptView = function(forceDept=''){
+    const dateEl=document.getElementById('d-dept-date');
+    if(dateEl && !dateEl.value) dateEl.value=todayS();
+    const date=dateEl?.value || todayS();
+    const data=getDepartmentCostData(date);
+    const preferred=isMdAll()?LIVE_UNITS:['Factory','Mandeep','Logistics'];
+    const found=data.map(g=>g.department);
+    const departments=[...preferred.filter(d=>found.includes(d)),...found.filter(d=>!preferred.includes(d))];
+    if(forceDept) DASH_DEPT_SELECTED=forceDept;
+    if(!departments.includes(DASH_DEPT_SELECTED)) DASH_DEPT_SELECTED=departments[0] || (isMdAll() ? LIVE_UNITS[0] : 'Factory');
+    document.getElementById('d-dept-tabs').innerHTML=departments.map(dep=>`<button class="dept-tab ${dep===DASH_DEPT_SELECTED?'active':''}" onclick="renderDashboardDeptView('${dep.replace(/'/g,"\\'")}')">${dep}</button>`).join('');
+    const active=data.find(g=>g.department===DASH_DEPT_SELECTED) || {department:DASH_DEPT_SELECTED,employees:[],salary:0,ot:0,total:0,present:0,absent:0,holiday:0};
+    const presentEmployees=active.employees.filter(e=>e.status==='P').sort((a,b)=>b.totalCost-a.totalCost || a.name.localeCompare(b.name));
+    const title = isMdAll() ? 'Unit' : 'Department';
+    document.getElementById('d-dept-summary').innerHTML=`
+      <div class="dept-mini-card"><div class="k">${title}</div><div class="v" style="font-size:16px">${active.department}</div><div class="s">Date ${fmtD(date)}</div></div>
+      <div class="dept-mini-card"><div class="k">Present Staff</div><div class="v">${presentEmployees.length}</div><div class="s">Total staff ${active.employees.length}</div></div>
+      <div class="dept-mini-card"><div class="k">Salary Cost</div><div class="v" style="color:var(--green)">₹${fmt(active.salary)}</div><div class="s">Present salary for date</div></div>
+      <div class="dept-mini-card"><div class="k">OT Cost</div><div class="v" style="color:#d97706">₹${fmt(active.ot)}</div><div class="s">Overtime for date</div></div>
+      <div class="dept-mini-card"><div class="k">Total Cost</div><div class="v" style="color:var(--accent)">₹${fmt(active.total)}</div><div class="s">Salary + OT</div></div>`;
+    document.getElementById('d-dept-list').innerHTML=presentEmployees.length ? presentEmployees.map((e,i)=>`<tr>
+      <td class="cm">${i+1}</td>
+      <td style="font-weight:500">${e.name}${isMdAll()?`<span class="unit-subline">${esc(e.unit)}</span>`:''}</td>
+      <td class="cm">${e.position||'—'}</td>
+      <td><span class="badge b${e.shift}">${e.shift}h</span></td>
+      <td class="mono">₹${fmt(e.salaryCost)}</td>
+      <td>${e.otHours?`<span class="badge bot">${e.otHours>0?'+':''}${Number(e.otHours).toFixed(1)}h</span>`:'—'}</td>
+      <td class="mono ca">${e.otCost?`₹${fmt(e.otCost)}`:'—'}</td>
+      <td class="mono" style="font-weight:600">₹${fmt(e.totalCost)}</td>
+    </tr>`).join('') : `<tr><td colspan="8" style="text-align:center;padding:22px;color:var(--muted)">No present employees on ${fmtD(date)}</td></tr>`;
+  };
+
+  renderEmpTable = function(){
+    const showUnit = isMdAll();
+    document.getElementById('emp-tbody').innerHTML = EMPS.map((e,i)=>`<tr>
+      <td class="cm">${i+1}</td>
+      <td style="font-weight:500">${e.name}${showUnit?`<span class="unit-subline">${esc(e.unit)}</span>`:''}</td>
+      <td><span class="badge b8">${normalizeDepartment(e.dept)}</span></td>
+      <td class="cm">${e.pos}</td>
+      <td class="mono">₹${fmt(e.salary)}</td>
+      <td><span class="badge b${e.shift}">${e.shift}h</span></td>
+      <td class="mono cm">₹${fmt(Math.round(salaryPerDay(e.salary, new Date().toISOString().slice(0,7))))}/day</td>
+      <td>${LIVE_STATE.currentUser.role==='md_admin' ? `<button class="btn btn-r btn-sm" onclick="delEmp(${e.id},'${e.name.replace(/'/g,"\\'")}')">Remove</button>` : '<span class="cm">Add only</span>'}</td>
+    </tr>`).join('')||'<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--muted)">No employees</td></tr>';
+  };
+
+  renderDashboard = function(){
+    const td=todayS(),dayAtt=da(td),foodD=mealTotalForDate(td);
+    document.getElementById('d-date').textContent=fmtD(td);
+    const dashDateEl=document.getElementById('d-dept-date');
+    if(dashDateEl && !dashDateEl.value) dashDateEl.value=td;
+    const selectedDate=dashDateEl?.value || td;
+    const selectedAtt=da(selectedDate), selectedFood=mealTotalForDate(selectedDate);
+    let pre=0,abs=0,hol=0,ot=0;
+    EMPS.forEach(e=>{ const r=dayAtt[e.id]||{}; if(r.status==='P') pre++; else if(r.status==='H') hol++; else abs++; if(r.status!=='H') ot+=num(r.ot); });
+    const totSal=EMPS.reduce((s,e)=>s+e.salary,0), currMo = td.slice(0,7);
+    const salD=EMPS.reduce((s,e)=>{ const r=dayAtt[e.id]; return s+(r?.status==='P'?salaryPerDay(e.salary, currMo):0); },0);
+    const otD =EMPS.reduce((s,e)=>{ const r=dayAtt[e.id]; return s+((r && r.status!=='H') ? otRatePerHour(e.salary, currMo, e.shift)*num(r.ot) : 0); },0);
+    const selectedMonth = selectedDate.slice(0,7);
+    let selectedPresent=0, selectedAbsent=0, selectedHoliday=0;
+    const salSelected=EMPS.reduce((s,e)=>{ const r=selectedAtt[e.id]||{}; if(r.status==='P') selectedPresent++; else if(r.status==='H') selectedHoliday++; else selectedAbsent++; return s+(r.status==='P'?salaryPerDay(e.salary, selectedMonth):0); },0);
+    const otSelected=EMPS.reduce((s,e)=>{ const r=selectedAtt[e.id]; return s+((r && r.status!=='H') ? otRatePerHour(e.salary, selectedMonth, e.shift)*num(r.ot) : 0); },0);
+    document.getElementById('d-stats').innerHTML=`
+      <div class="stat-card"><div class="stat-label">Total Employees</div><div class="stat-val sv-b">${EMPS.length}</div></div>
+      <div class="stat-card"><div class="stat-label">Monthly Payroll</div><div class="stat-val" style="font-size:17px">₹${fmt(totSal)}</div></div>
+      <div class="stat-card"><div class="stat-label">Today Salary Cost</div><div class="stat-val sv-g" style="font-size:17px">₹${fmt(salD)}</div></div>
+      <div class="stat-card"><div class="stat-label">Today Total Cost</div><div class="stat-val sv-a" style="font-size:17px">₹${fmt(salD+otD+foodD)}</div></div>`;
+    document.getElementById('d-s3').innerHTML=`
+      <div class="s3c"><div class="s3i ig">✅</div><div><div class="s3n">${pre}</div><div class="s3l">Present Today</div></div></div>
+      <div class="s3c"><div class="s3i ir">❌</div><div><div class="s3n">${abs}</div><div class="s3l">Absent Today</div></div></div>
+      <div class="s3c"><div class="s3i ib">📅</div><div><div class="s3n">${hol}</div><div class="s3l">On Holiday</div></div></div>`;
+    let rows='<thead><tr><th>Name</th><th>Shift</th><th>Status</th><th>OT</th></tr></thead><tbody>';
+    EMPS.forEach(e=>{ const r=dayAtt[e.id]||{},st=r.status||'A',otVal=num(r.ot); rows+=`<tr><td style="font-weight:500">${e.name}${isMdAll()?`<span class="unit-subline">${esc(e.unit)}</span>`:''}</td><td><span class="badge b${e.shift}">${e.shift}h</span></td><td><span class="badge ${st==='P'?'bp':st==='H'?'bh':'ba'}">${st==='P'?'Present':st==='H'?'Holiday':'Absent'}</span></td><td>${otVal!==0?`<span class="badge bot">${otVal>0?'+':''}${otVal.toFixed(1)}h</span>`:'—'}</td></tr>`; });
+    document.getElementById('d-att').innerHTML=rows+'</tbody>';
+    const mealEntrySelected=mealEntry(selectedDate);
+    document.getElementById('d-cost-date-lbl').textContent='· '+fmtD(selectedDate);
+    document.getElementById('d-cost').innerHTML=`
+      <div style="display:grid;grid-template-columns:1fr auto;gap:7px 12px;font-size:12px;align-items:center">
+        <span style="color:var(--muted)">Salary (${selectedPresent} present)</span><span class="mono" style="font-weight:500">₹${fmt(salSelected)}</span>
+        <span style="color:var(--muted)">OT Cost</span><span class="mono ca">₹${fmt(otSelected)}</span>
+        <span style="color:var(--muted)">Food Cost</span><span class="mono cg">₹${fmt(selectedFood)}</span>
+        <span style="color:var(--muted)">Status Mix</span><span class="mono cm">P ${selectedPresent} · A ${selectedAbsent} · H ${selectedHoliday}</span>
+        <span style="color:var(--muted)">Food counts</span><span class="mono cm">Tea ${num(mealEntrySelected.tea)} · Snacks ${num(mealEntrySelected.snacks)} · Dinner ${num(mealEntrySelected.dinner)}</span>
+        <div style="grid-column:1/-1;border-top:1px solid var(--border);margin:3px 0"></div>
+        <span style="font-weight:500">Total For Date</span>
+        <span class="mono" style="font-weight:600;font-size:15px;color:var(--accent)">₹${fmt(salSelected+otSelected+selectedFood)}</span>
+      </div>`;
+    const shiftGroups=[...EMPS.reduce((m,e)=>{const k=String(e.shift||0);m.set(k,(m.get(k)||0)+1);return m;},new Map()).entries()].sort((a,b)=>Number(a[0])-Number(b[0]));
+    const n=Math.max(EMPS.length,1);
+    const shiftGradients=['linear-gradient(90deg,var(--purple),var(--blue))','linear-gradient(90deg,var(--blue),var(--teal))','linear-gradient(90deg,var(--green),var(--teal))','linear-gradient(90deg,#f59e0b,#f97316)'];
+    document.getElementById('d-shift').innerHTML=shiftGroups.map(([hrs,count],idx)=>`<div style="margin-bottom:${idx===shiftGroups.length-1?0:10}px"><div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px"><span style="color:var(--muted)">${hrs}-Hour</span><span style="font-weight:500">${count}</span></div><div class="prog-wrap"><div class="prog" style="width:${Math.round(count/n*100)}%;background:${shiftGradients[idx%shiftGradients.length]}"></div></div></div>`).join('');
+    document.getElementById('d-earn').innerHTML=[...EMPS].sort((a,b)=>b.salary-a.salary).slice(0,5).map(e=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 14px;border-bottom:1px solid #f3f4f6"><span style="font-size:12px">${e.name}${isMdAll()?`<span class="unit-subline">${esc(e.unit)}</span>`:''}</span><span class="mono ca" style="font-size:12px;font-weight:500">₹${fmt(e.salary)}</span></div>`).join('');
+    renderDashboardDeptView();
+    if(document.getElementById('dept-cost-modal')?.style.display==='flex') renderDeptCostModal();
+  };
+
+  renderPayroll = function(){
+    const mo=document.getElementById('pay-month').value||new Date().toISOString().slice(0,7), days=daysInMonth(mo); document.getElementById('pay-days').value=days;
+    const mealMonth = mealTotalForMonth(mo); const payRows=EMPS.map(e=>{ const ds=daInMo(mo); let daysP=0,oth=0; ds.forEach(([_,m])=>{const r=m[e.id]; if(r?.status==='P')daysP++; if(r && r.status!=='H') oth+=num(r.ot);}); const sal=Math.round(salaryPerDay(e.salary,mo)*daysP); const ota=Math.round(otRatePerHour(e.salary,mo,e.shift)*oth); const adv=num((ADVS[mo]||{})[e.id]); const food = EMPS.length ? Math.round(mealMonth/EMPS.length) : 0; return {e,daysP,oth:+oth.toFixed(2),sal,ota,food,adv,net:sal+ota-adv,total:sal+ota+food}; });
+    document.getElementById('pay-tbody').innerHTML=payRows.map((r,i)=>`<tr><td class="cm">${i+1}</td><td style="font-weight:500">${r.e.name}${isMdAll()?`<span class="unit-subline">${esc(r.e.unit)}</span>`:''}</td><td><span class="badge b${r.e.shift}">${r.e.shift}h</span></td><td><button class="btn btn-sm" onclick="openEmpAttendanceModal('${mo}',${r.e.id},'${r.e.name.replace(/'/g,"\\'")}')">${r.daysP}</button></td><td>${r.oth||0}</td><td class="mono">₹${fmt(r.sal)}</td><td class="mono ca">₹${fmt(r.ota)}</td><td class="mono cg">₹${fmt(r.food)}</td><td><input class="adv-inp" type="number" value="${r.adv}" onblur="setAdv('${mo}',${r.e.id},'${r.e.name.replace(/'/g,"\\'")}',this.value)"></td><td class="mono" style="font-weight:600">₹${fmt(r.net)}</td><td class="mono">₹${fmt(r.total)}</td></tr>`).join('');
+    const T=payRows.reduce((a,b)=>({daysP:a.daysP+b.daysP,oth:a.oth+b.oth,sal:a.sal+b.sal,ota:a.ota+b.ota,food:a.food+b.food,adv:a.adv+b.adv,net:a.net+b.net,total:a.total+b.total}),{daysP:0,oth:0,sal:0,ota:0,food:0,adv:0,net:0,total:0});
+    document.getElementById('pay-tfoot').innerHTML=`<td colspan="3">Total</td><td>${T.daysP}</td><td>${Math.round(T.oth*100)/100}</td><td>₹${fmt(T.sal)}</td><td>₹${fmt(T.ota)}</td><td>₹${fmt(T.food)}</td><td>₹${fmt(T.adv)}</td><td>₹${fmt(T.net)}</td><td>₹${fmt(T.total)}</td>`;
+  };
+
+  renderOT = function(){
+    const mo=document.getElementById('ot-month').value||new Date().toISOString().slice(0,7); const rows=EMPS.map(e=>{ const ds=daInMo(mo); let daysP=0,oth=0; ds.forEach(([_,m])=>{const r=m[e.id]; if(r?.status==='P')daysP++; if(r && r.status!=='H') oth+=num(r.ot);}); const rate=Math.round(otRatePerHour(e.salary,mo,e.shift)*100)/100,amt=Math.round(rate*oth); return {e,daysP,oth:+oth.toFixed(2),rate,amt}; });
+    document.getElementById('ot-tbody').innerHTML=rows.map((r,i)=>`<tr><td class="cm">${i+1}</td><td style="font-weight:500">${r.e.name}${isMdAll()?`<span class="unit-subline">${esc(r.e.unit)}</span>`:''}</td><td><span class="badge b${r.e.shift}">${r.e.shift}h</span></td><td>${r.daysP}</td><td>${r.oth}</td><td class="mono">₹${fmt(r.rate)}</td><td class="mono ca">₹${fmt(r.amt)}</td></tr>`).join('');
+    const totH=rows.reduce((s,r)=>s+r.oth,0), totA=rows.reduce((s,r)=>s+r.amt,0); document.getElementById('ot-tfoot').innerHTML=`<td colspan="4">Total</td><td>${Math.round(totH*100)/100}</td><td>—</td><td>₹${fmt(totA)}</td>`;
+  };
+
+  renderReports = function(){
+    const months=[...new Set(Object.keys(ATTS).map(d=>d.slice(0,7)))].sort().reverse();
+    document.getElementById('rep-body').innerHTML=months.map(m=>{ const ds=daInMo(m), staff=EMPS.length; let sal=0,ot=0; ds.forEach(([d,map])=>{ EMPS.forEach(e=>{ const r=map[e.id]; if(r?.status==='P') sal+=salaryPerDay(e.salary,m); if(r && r.status!=='H') ot+=otRatePerHour(e.salary,m,e.shift)*num(r.ot); }); }); const food=mealTotalForMonth(m); return `<tr><td>${m}</td><td>${ds.length}</td><td>${staff}</td><td>₹${fmt(sal)}</td><td>₹${fmt(ot)}</td><td>₹${fmt(food)}</td><td>₹${fmt(sal+ot+food)}</td></tr>`; }).join('')||'<tr><td colspan="7" style="text-align:center;padding:22px;color:var(--muted)">No data</td></tr>';
+    const top=[...EMPS].sort((a,b)=>b.salary-a.salary)[0];
+    document.getElementById('rep-sal').innerHTML=top?`<div style="padding:14px 16px"><strong>${top.name}</strong><div style="font-size:11px;color:var(--muted)">${top.pos}${top.unit?` · ${top.unit}`:''}</div><div class="mono" style="margin-top:8px">₹${fmt(top.salary)}</div></div>`:'<div style="padding:14px 16px;color:var(--muted)">No data</div>';
+    const m=document.getElementById('ot-month').value||new Date().toISOString().slice(0,7); const otLeader=[...EMPS].map(e=>({e,ot:daInMo(m).reduce((s,[_,map])=>s+num((map[e.id]||{}).ot),0)})).sort((a,b)=>b.ot-a.ot)[0];
+    document.getElementById('rep-ot').innerHTML=otLeader?`<div style="padding:14px 16px"><strong>${otLeader.e.name}</strong><div style="font-size:11px;color:var(--muted)">${m}${otLeader.e.unit?` · ${otLeader.e.unit}`:''}</div><div class="mono" style="margin-top:8px">${Math.round(otLeader.ot*100)/100} hrs</div></div>`:'<div style="padding:14px 16px;color:var(--muted)">No data</div>';
+  };
+
+  document.addEventListener('keydown', (e)=>{ if(e.key==='Enter' && document.getElementById('live-login-overlay')?.style.display==='flex') liveDoLogin(); });
+
+  injectLiveStyle();
+  injectLiveLogin();
+  ensureChrome();
+  const saved = localStorage.getItem(LIVE_LOGIN_KEY);
+  if(saved){ const u = LIVE_USERS.find(x=>x.key===saved); if(u){ LIVE_STATE.currentUser=u; LIVE_STATE.mdScope = u.role==='md_admin' ? 'ALL' : u.unit; hideLiveLogin(); boot(true); } else showLiveLogin(); }
+  else showLiveLogin();
+})();
+</script>
+
 </body>
 </html>
