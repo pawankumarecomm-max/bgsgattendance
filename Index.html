@@ -47,7 +47,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);dis
 .page{display:none;padding:20px 24px;animation:fi .25s ease}
 .page.active{display:block}
 @keyframes fi{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
-.stat-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}
+.stat-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-bottom:16px}
 .stat-card{background:#fff;border:1px solid var(--border);border-radius:var(--r);padding:16px 18px;box-shadow:0 1px 3px rgba(0,0,0,.04)}
 .stat-label{font-size:9px;text-transform:uppercase;letter-spacing:.9px;color:var(--muted);margin-bottom:7px}
 .stat-val{font-size:22px;font-weight:600;font-family:'DM Mono',monospace}
@@ -3078,6 +3078,16 @@ boot();
     const totSal=EMPS.reduce((s,e)=>s+e.salary,0), currMo = td.slice(0,7);
     const salD=EMPS.reduce((s,e)=>{ const r=dayAtt[e.id]; return s+(r?.status==='P'?salaryPerDay(e.salary, currMo):0); },0);
     const otD =EMPS.reduce((s,e)=>{ const r=dayAtt[e.id]; return s+((r && r.status!=='H') ? otRatePerHour(e.salary, currMo, e.shift)*num(r.ot) : 0); },0);
+    const mealMonth = mealTotalForMonth(currMo);
+    let monthSalaryCost = 0, monthOtCost = 0;
+    daInMo(currMo).forEach(([d,map])=>{
+      EMPS.forEach(e=>{
+        const r = map[e.id];
+        if(r?.status==='P') monthSalaryCost += salaryPerDay(e.salary, currMo);
+        if(r && r.status!=='H') monthOtCost += otRatePerHour(e.salary, currMo, e.shift)*num(r.ot);
+      });
+    });
+    const monthTotalCost = monthSalaryCost + monthOtCost + mealMonth;
     const selectedMonth = selectedDate.slice(0,7);
     let selectedPresent=0, selectedAbsent=0, selectedHoliday=0;
     const salSelected=EMPS.reduce((s,e)=>{ const r=selectedAtt[e.id]||{}; if(r.status==='P') selectedPresent++; else if(r.status==='H') selectedHoliday++; else selectedAbsent++; return s+(r.status==='P'?salaryPerDay(e.salary, selectedMonth):0); },0);
@@ -3085,8 +3095,9 @@ boot();
     document.getElementById('d-stats').innerHTML=`
       <div class="stat-card"><div class="stat-label">Total Employees</div><div class="stat-val sv-b">${EMPS.length}</div></div>
       <div class="stat-card"><div class="stat-label">Monthly Payroll</div><div class="stat-val" style="font-size:17px">₹${fmt(totSal)}</div></div>
-      <div class="stat-card"><div class="stat-label">Today Salary Cost</div><div class="stat-val sv-g" style="font-size:17px">₹${fmt(salD)}</div></div>
-      <div class="stat-card"><div class="stat-label">Today Total Cost</div><div class="stat-val sv-a" style="font-size:17px">₹${fmt(salD+otD+foodD)}</div></div>`;
+      <div class="stat-card"><div class="stat-label">Current Month Salary Cost</div><div class="stat-val sv-g" style="font-size:17px">₹${fmt(monthSalaryCost + monthOtCost)}</div></div>
+      <div class="stat-card"><div class="stat-label">Current Month Snacks Cost</div><div class="stat-val cg" style="font-size:17px">₹${fmt(mealMonth)}</div></div>
+      <div class="stat-card"><div class="stat-label">Current Month Total Cost</div><div class="stat-val sv-a" style="font-size:17px">₹${fmt(monthTotalCost)}</div></div>`;
     document.getElementById('d-s3').innerHTML=`
       <div class="s3c"><div class="s3i ig">✅</div><div><div class="s3n">${pre}</div><div class="s3l">Present Today</div></div></div>
       <div class="s3c"><div class="s3i ir">❌</div><div><div class="s3n">${abs}</div><div class="s3l">Absent Today</div></div></div>
