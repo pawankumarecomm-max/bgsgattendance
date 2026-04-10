@@ -687,9 +687,9 @@ function snackRow(r){
 }
 async function getAllFromSupabase(){
   const [employees, attendance, advances, snacks] = await Promise.all([
-    sb(getSupabase().from(TABLES.EMP).select('*').order('id', {ascending:true}), 'Load employees'),
-    sb(getSupabase().from(TABLES.ATT).select('*').order('date', {ascending:true}).order('employee_id', {ascending:true}), 'Load attendance'),
-    sb(getSupabase().from(TABLES.ADV).select('*').order('month', {ascending:true}).order('employee_id', {ascending:true}), 'Load advances'),
+    sb(getSupabase().from(TABLES.EMP).select('*').order('id', {ascending:true}).limit(10000), 'Load employees'),
+    sb(getSupabase().from(TABLES.ATT).select('*').order('date', {ascending:true}).order('employee_id', {ascending:true}).limit(50000), 'Load attendance'),
+    sb(getSupabase().from(TABLES.ADV).select('*').order('month', {ascending:true}).order('employee_id', {ascending:true}).limit(10000), 'Load advances'),
     sb(getSupabase().from(TABLES.SNK).select('*').order('id', {ascending:true}).limit(1), 'Load snacks')
   ]);
   return {
@@ -805,12 +805,13 @@ const MAX_LOCAL_BACKUPS = 8;
 
 function buildCacheSnapshot(){
   return {
-    employees: EMPS.map(e=>({id:e.id,name:e.name,department:e.dept,position:e.pos,salary:e.salary,shift:e.shift,status:'ACTIVE'})),
+    employees: EMPS.map(e=>({id:e.id,name:e.name,department:e.dept,position:e.pos,salary:e.salary,shift:e.shift,status:'ACTIVE',unit_name:e.unit||''})),
     attendance: Object.entries(ATTS).flatMap(([date,dayA])=>
       Object.entries(dayA).map(([eid,r])=>({employee_id:+eid,date,...r,ot_hours:r.ot,total_hours:r.hrs}))),
     advances: Object.entries(ADVS).flatMap(([mo,mo_])=>
       Object.entries(mo_).map(([eid,amt])=>({employee_id:+eid,month:mo,amount:amt}))),
-    snacks: {morning:SNK.tea,snacks:SNK.snacks,evening:SNK.dinner}
+    snacks: {morning:SNK.tea,snacks:SNK.snacks,evening:SNK.dinner},
+    meal_logs: Object.entries(MEALS).map(([date,e])=>({log_date:date,tea:e.tea||0,snacks:e.snacks||0,dinner:e.dinner||0}))
   };
 }
 function cacheCounts(cache){
@@ -886,7 +887,9 @@ function mergeDatasets(baseData, incomingData){
       .sort((a,b)=> String(a.date||'').localeCompare(String(b.date||'')) || ((+a.employee_id||0)-(+b.employee_id||0))),
     advances: mergeByKey(base.advances, incoming.advances, r=>`${num(r.employee_id)}|${String(r.month||'').trim()}`)
       .sort((a,b)=> String(a.month||'').localeCompare(String(b.month||'')) || ((+a.employee_id||0)-(+b.employee_id||0))),
-    snacks: incoming.snacks || base.snacks || {morning:10,snacks:20,evening:80}
+    snacks: incoming.snacks || base.snacks || {morning:10,snacks:20,evening:80},
+    meal_logs: mergeByKey(base.meal_logs, incoming.meal_logs, r=>String(r.log_date||r.date||'').slice(0,10))
+      .sort((a,b)=>String(a.log_date||a.date||'').localeCompare(String(b.log_date||b.date||'')))
   };
 }
 function loadBestLocalCache(){
@@ -895,7 +898,7 @@ function loadBestLocalCache(){
   const backup = loadBackupSnapshot();
   const candidates = [backup, legacy, primary].filter(Boolean);
   if(!candidates.length) return null;
-  return candidates.reduce((acc, item)=>mergeDatasets(acc, item), {employees:[], attendance:[], advances:[], snacks:{morning:10,snacks:20,evening:80}});
+  return candidates.reduce((acc, item)=>mergeDatasets(acc, item), {employees:[], attendance:[], advances:[], snacks:{morning:10,snacks:20,evening:80}, meal_logs:[]});
 }
 function saveLocalCache(opts={}){
   try{
@@ -930,6 +933,13 @@ async function syncDatasetToCloud(data){
   if(dataset.snacks){
     await gasGet({action:'saveSnacks', morning:dataset.snacks.morning, snacks:dataset.snacks.snacks, evening:dataset.snacks.evening});
   }
+  // Sync meal logs to cloud
+  const mealRows = ensureArray(dataset.meal_logs);
+  for(const row of mealRows){
+    try{
+      await gasGet({action:'saveMealLog', log_date:row.log_date||row.date, unit_name:row.unit_name||'', tea:row.tea||0, snacks:row.snacks||0, dinner:row.dinner||0});
+    }catch(_){}
+  }
 }
 async function restoreLatestBackup(){
   const archive = getBackupArchive();
@@ -939,10 +949,12 @@ async function restoreLatestBackup(){
     return;
   }
   const counts = cacheCounts(backup);
+  const mealCount = ensureArray(backup.meal_logs).length;
   const msg = `Restore latest backup?
 Employees: ${counts.employees}
 Attendance rows: ${counts.attendance}
-Advances: ${counts.advances}`;
+Advances: ${counts.advances}
+Food entries: ${mealCount}`;
   if(!confirm(msg)) return;
   parseAll(backup);
   saveLocalCache({reason:'manual-restore', allowSmallerOverwrite:true});
@@ -1045,6 +1057,18 @@ function parseAll(data) {
   document.getElementById('t-m').value=SNK.tea;
   document.getElementById('t-s').value=SNK.snacks;
   const dinnerEl=document.getElementById('t-d'); if(dinnerEl) dinnerEl.value=SNK.dinner;
+
+  // Meal logs — merge incoming into existing MEALS (never wipe)
+  if(Array.isArray(data.meal_logs) && data.meal_logs.length){
+    data.meal_logs.forEach(r=>{
+      const d=String(r.log_date||r.date||'').slice(0,10); if(!d) return;
+      if(!MEALS[d]) MEALS[d]={tea:0,snacks:0,dinner:0};
+      MEALS[d].tea = +r.tea||0;
+      MEALS[d].snacks = +r.snacks||0;
+      MEALS[d].dinner = +r.dinner||0;
+    });
+    saveMealStore();
+  }
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -1670,7 +1694,7 @@ function markAll(st){
 async function saveAtt(){
   const date=document.getElementById('att-date').value;
   if(!date){toast('⚠ Select a date','err');return;}
-  if(!Object.keys(EDITS).length){toast('No changes to save');return;}
+  if(!ATT_DIRTY && !Object.keys(EDITS).length){toast('No changes to save');return;}
   if(!ATTS[date])ATTS[date]={};
   const rows=[];
   EMPS.forEach(e=>{
@@ -1699,12 +1723,13 @@ async function saveAtt(){
   });
   setPill('busy',`Saving ${rows.length} rows…`);
   // Always update local cache first (instant, offline-safe)
-  saveLocalCache({reason:'attendance-local-save', backupCurrent:true, backupReason:'before-attendance-save'});
+  saveLocalCache({reason:'attendance-local-save', allowSmallerOverwrite:true, backupCurrent:true, backupReason:'before-attendance-save'});
+  saveMealStore();
   try{
     await gasGet({action:'saveAttendance',rows});
     ATT_DIRTY=false;
     EDITS={}; renderAtt(); renderDashboard(); renderPayroll(); renderOT(); renderReports();
-    saveLocalCache({reason:'attendance-cloud-sync'});
+    saveLocalCache({reason:'attendance-cloud-sync', allowSmallerOverwrite:true});
     setPill('ok','Synced ✓'); toast(`✓ Attendance saved for ${date}`,'ok');
   }catch(e){
     // Data is already in memory + localStorage — just warn
@@ -1875,13 +1900,16 @@ async function saveSnacks(){
   SNK.tea=+document.getElementById('t-m').value||10;
   SNK.snacks=+document.getElementById('t-s').value||20;
   SNK.dinner=+document.getElementById('t-d').value||80;
-  saveLocalCache({reason:'snack-rate-save', backupCurrent:true, backupReason:'before-snack-rate-save'});
+  saveLocalCache({reason:'snack-rate-save', allowSmallerOverwrite:true, backupCurrent:true, backupReason:'before-snack-rate-save'});
   setPill('busy','Saving…');
   try{
     await gasGet({action:'saveSnacks',morning:SNK.tea,evening:SNK.dinner,snacks:SNK.snacks});
-    saveLocalCache({reason:'snack-rate-cloud-sync'});
-    setPill('ok','Synced ✓');toast('✓ Food rates saved','ok');renderSnacks(); renderDashboard(); renderPayroll(); renderReports();
-  }catch(e){setPill('err','Error');toast('⚠ '+e.message,'err');}
+    saveLocalCache({reason:'snack-rate-cloud-sync', allowSmallerOverwrite:true});
+    setPill('ok','Synced ✓');toast('✓ Food rates saved','ok');
+  }catch(e){
+    setPill('err','Offline');toast('📦 Rates saved locally — will sync when connected','i');
+  }
+  renderSnacks(); renderDashboard(); renderPayroll(); renderReports();
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -2067,24 +2095,29 @@ function parseAttXL(ws){
 }
 async function confirmAttXL(){
   const data=window._ia;if(!data)return;
-  // Update local cache
+  // Update ATTS in memory first — never lose data
   data.forEach(r=>{
     if(!ATTS[r.date])ATTS[r.date]={};
     ATTS[r.date][r.employee_id]={status:r.status,in_time:'',out_time:'',ot:r.ot_hours,hrs:r.total_hours};
   });
+  saveLocalCache({reason:'excel-import-local', allowSmallerOverwrite:true, backupCurrent:true, backupReason:'before-excel-import'});
   document.getElementById('att-prev').innerHTML=`<div style="margin-top:8px;padding:8px 12px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:var(--rs);color:var(--green);font-size:12px">Saving ${data.length} rows…</div>`;
   setPill('busy',`Saving ${data.length} rows…`);
   try{
-    // Send in batches of 200
     const CHUNK=200;
     for(let i=0;i<data.length;i+=CHUNK){
       setPill('busy',`${Math.min(i+CHUNK,data.length)}/${data.length} saved…`);
       await gasGet({action:'importAttendance',rows:data.slice(i,i+CHUNK)});
     }
+    saveLocalCache({reason:'excel-import-cloud-sync', allowSmallerOverwrite:true});
     setPill('ok','Synced ✓');
-    document.getElementById('att-prev').innerHTML=`<div style="margin-top:8px;padding:8px 12px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:var(--rs);color:var(--green);font-size:12px">✓ ${data.length} rows saved to Database!</div>`;
+    document.getElementById('att-prev').innerHTML=`<div style="margin-top:8px;padding:8px 12px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:var(--rs);color:var(--green);font-size:12px">✓ ${data.length} rows saved!</div>`;
     toast('✓ '+data.length+' attendance rows saved','ok');
-  }catch(e){setPill('err','Error');toast('⚠ '+e.message,'err');}
+  }catch(e){
+    setPill('err','Offline');
+    document.getElementById('att-prev').innerHTML=`<div style="margin-top:8px;padding:8px 12px;background:#fef9ec;border:1px solid #fde68a;border-radius:var(--rs);color:#92400e;font-size:12px">📦 ${data.length} rows saved locally — will sync when connected</div>`;
+    toast('📦 Saved locally — will sync when connected','i');
+  }
 }
 function previewBox(count,label,lines,extra,confirmFn){
   return`<div style="margin-top:10px;padding:12px;background:#f9fafb;border-radius:var(--rs);border:1px solid var(--border)">
@@ -2565,18 +2598,26 @@ async function punchSheetAttendance(){
   const duplicateCount=rows.length-dedupedRows.length;
 
   setPill('busy','Saving attendance…');
+  // Always save locally first — data is already in ATTS memory
+  saveLocalCache({reason:'sheet-import-save', allowSmallerOverwrite:true, backupCurrent:true, backupReason:'before-sheet-import'});
   try{
     const CHUNK=200;
     for(let i=0;i<dedupedRows.length;i+=CHUNK){
       await gasGet({action:'saveAttendance',rows:dedupedRows.slice(i,i+CHUNK)});
     }
+    saveLocalCache({reason:'sheet-import-cloud-sync', allowSmallerOverwrite:true});
     setPill('ok','Synced ✓');
     EDITS={};
     renderDashboard(); renderPayroll(); renderOT(); renderReports(); renderAtt();
     const label = mode==='IN' ? 'IN punches' : mode==='OUT' ? 'OUT punches' : mode==='SIMPLE' ? 'quick attendance' : 'full attendance';
     const dedupeNote = duplicateCount>0 ? ` · ${duplicateCount} duplicate sheet line(s) merged` : '';
     toast(`✓ Saved ${label} for ${dedupedRows.length} employees on ${date}${dedupeNote}`,'ok');
-  }catch(e){setPill('err','Error');toast('⚠ '+e.message,'err');}
+  }catch(e){
+    EDITS={};
+    setPill('err','Offline');
+    toast(`📦 Saved locally (${dedupedRows.length} rows) — will sync when connected`,'i');
+    renderDashboard(); renderPayroll(); renderOT(); renderReports(); renderAtt();
+  }
 }
 
 
@@ -2841,14 +2882,24 @@ boot();
     const snackEl=document.getElementById('t-s'); if(snackEl) snackEl.value=SNK.snacks;
     const dinnerEl=document.getElementById('t-d'); if(dinnerEl) dinnerEl.value=SNK.dinner;
 
-    MEALS = {};
-    mealRows.forEach(r=>{
-      const d = String(r.log_date || r.date || '').slice(0,10); if(!d) return;
-      if(!MEALS[d]) MEALS[d] = {tea:0, snacks:0, dinner:0};
-      MEALS[d].tea += +r.tea || 0;
-      MEALS[d].snacks += +r.snacks || 0;
-      MEALS[d].dinner += +r.dinner || 0;
-    });
+    // Merge cloud meal_logs on top of existing in-memory MEALS — never wipe
+    // Load localStorage meals first as base so nothing is lost if cloud returns empty
+    try{
+      const lsMeals = JSON.parse(localStorage.getItem(MEAL_KEY) || '{}') || {};
+      Object.entries(lsMeals).forEach(([d,e])=>{
+        if(!MEALS[d]) MEALS[d] = {tea:+e.tea||0, snacks:+e.snacks||0, dinner:+e.dinner||0};
+      });
+    }catch(_){}
+    if(mealRows.length){
+      mealRows.forEach(r=>{
+        const d = String(r.log_date || r.date || '').slice(0,10); if(!d) return;
+        if(!MEALS[d]) MEALS[d] = {tea:0, snacks:0, dinner:0};
+        MEALS[d].tea = +r.tea || 0;
+        MEALS[d].snacks = +r.snacks || 0;
+        MEALS[d].dinner = +r.dinner || 0;
+      });
+    }
+    saveMealStore();
   }
 
   const _oldGetAll = getAllFromSupabase;
@@ -2856,7 +2907,7 @@ boot();
     const base = await _oldGetAll();
     let mealLogs = [];
     try{
-      mealLogs = await sb(getSupabase().from('meal_logs').select('*').order('log_date', {ascending:true}), 'Load meal logs');
+      mealLogs = await sb(getSupabase().from('meal_logs').select('*').order('log_date', {ascending:true}).limit(10000), 'Load meal logs');
     }catch(_){ mealLogs = []; }
     return { ...base, meal_logs: Array.isArray(mealLogs) ? mealLogs : [] };
   };
@@ -2961,7 +3012,7 @@ boot();
   saveAtt = async function(){
     const date=document.getElementById('att-date').value;
     if(!date){toast('⚠ Select a date','err');return;}
-    if(!Object.keys(EDITS).length){toast('No changes to save');return;}
+    if(!ATT_DIRTY && !Object.keys(EDITS).length){toast('No changes to save');return;}
     if(!ATTS[date])ATTS[date]={};
     const rows=[];
     EMPS.forEach(e=>{
@@ -2977,29 +3028,59 @@ boot();
       rows.push({employee_id:e.id,employee_name:e.name,date,status:r.status,in_time:r.in_time,out_time:r.out_time,total_hours:r.hrs,ot_hours:r.ot,unit_name:e.unit||DEFAULT_UNIT});
     });
     setPill('busy',`Saving ${rows.length} rows…`);
-    await gasGet({action:'saveAttendance',rows});
-    ATT_DIRTY=false; EDITS={};
-    await boot(true);
-    toast(`✓ Attendance saved for ${date}`,'ok');
+    try{
+      await gasGet({action:'saveAttendance',rows});
+      ATT_DIRTY=false; EDITS={};
+      saveLocalCache({reason:'attendance-cloud-sync', allowSmallerOverwrite:true, backupCurrent:true, backupReason:'before-att-cloud-sync'});
+      saveMealStore();
+      setPill('ok','Synced ✓');
+      renderAtt(); renderDashboard(); renderPayroll(); renderOT(); renderReports();
+      toast(`✓ Attendance saved for ${date}`,'ok');
+    }catch(e){
+      ATT_DIRTY=false; EDITS={};
+      saveLocalCache({reason:'attendance-local-save', allowSmallerOverwrite:true, backupCurrent:true, backupReason:'before-att-local-save'});
+      saveMealStore();
+      renderAtt(); renderDashboard();
+      toast(`📦 Saved locally — will sync when connected`,'i');
+    }
   };
 
   setAdv = async function(mo,eid,name,val){
     const unit = (EMPS.find(e=>e.id===eid)?.unit) || (LIVE_STATE.currentUser?.unit) || DEFAULT_UNIT;
     if(!ADVS[mo]) ADVS[mo] = {};
     ADVS[mo][eid] = num(val);
-    await gasGet({action:'saveAdvance',month:mo,employee_id:eid,employee_name:name,amount:num(val),unit_name:unit});
+    saveLocalCache({reason:'advance-save', allowSmallerOverwrite:true, backupCurrent:true, backupReason:'before-advance-save'});
+    try{
+      await gasGet({action:'saveAdvance',month:mo,employee_id:eid,employee_name:name,amount:num(val),unit_name:unit});
+      setPill('ok','Synced ✓');
+    }catch(e){
+      setPill('err','Offline'); toast('📦 Advance saved locally','i');
+    }
     renderPayroll();
   };
 
-  saveMealStore = function(){};
+  saveMealStore = function(){ try{ localStorage.setItem(MEAL_KEY, JSON.stringify(MEALS)); }catch(_){} };
   saveMealEntry = async function(){
     const date=document.getElementById('meal-date').value || todayS();
     const unit = LIVE_STATE.currentUser.role==='md_admin' ? (LIVE_STATE.mdScope==='ALL' ? '' : LIVE_STATE.mdScope) : LIVE_STATE.currentUser.unit;
     if(!unit){ toast('Select one unit in MD scope before saving food entry','err'); return; }
+    const tea = +(document.getElementById('meal-tea').value||0);
+    const snacks = +(document.getElementById('meal-snacks').value||0);
+    const dinner = +(document.getElementById('meal-dinner').value||0);
+    // Update MEALS in memory immediately — data is never lost even if Supabase fails
+    if(!MEALS[date]) MEALS[date] = {tea:0, snacks:0, dinner:0};
+    MEALS[date] = {tea, snacks, dinner};
+    saveMealStore();
     setPill('busy','Saving food…');
-    await gasGet({action:'saveMealLog',log_date:date,unit_name:unit,tea:+(document.getElementById('meal-tea').value||0),snacks:+(document.getElementById('meal-snacks').value||0),dinner:+(document.getElementById('meal-dinner').value||0)});
-    await boot(true);
-    toast('✓ Daily food entry saved for ' + unit,'ok');
+    try{
+      await gasGet({action:'saveMealLog',log_date:date,unit_name:unit,tea,snacks,dinner});
+      setPill('ok','Synced ✓');
+      toast('✓ Daily food entry saved for ' + unit,'ok');
+    }catch(e){
+      setPill('err','Offline');
+      toast('📦 Food entry saved locally — will sync when connected','i');
+    }
+    renderSnacks(); renderDashboard();
   };
 
   getDepartmentCostData = function(date=todayS()){
