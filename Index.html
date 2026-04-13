@@ -615,7 +615,7 @@ let ATT_DIRTY=false;
 const MEAL_KEY='jhajjar_meal_logs_v1';
 let MEALS={};
 let DASH_DEPT_SELECTED='Factory';
-try{ MEALS = JSON.parse(localStorage.getItem(MEAL_KEY) || '{}') || {}; }catch(_){ MEALS = {}; }
+MEALS = {};
 
 /* ══════════════════════════════════════════════════════════════
    DATABASE API — Supabase
@@ -807,6 +807,13 @@ const LC_BACKUP_LATEST_KEY = 'jhajjar_local_cache_backup_latest_v1';
 const LC_BACKUP_ARCHIVE_KEY = 'jhajjar_local_cache_backup_archive_v1';
 const MAX_LOCAL_BACKUPS = 8;
 
+function clearCloudOnlyCache(){
+  try{
+    [LC_KEY, ...LEGACY_CACHE_KEYS, LC_BACKUP_LATEST_KEY, LC_BACKUP_ARCHIVE_KEY, MEAL_KEY].forEach(k=>localStorage.removeItem(k));
+  }catch(_){ }
+}
+clearCloudOnlyCache();
+
 function buildCacheSnapshot(){
   return {
     employees: EMPS.map(e=>({id:e.id,name:e.name,department:e.dept,position:e.pos,salary:e.salary,shift:e.shift,status:'ACTIVE'})),
@@ -852,19 +859,9 @@ function saveBackupSnapshot(cache, reason='backup'){
   }catch(_){ }
   return stamped;
 }
-function loadBackupSnapshot(){
-  return parseJsonSafe(localStorage.getItem(LC_BACKUP_LATEST_KEY));
-}
-function loadLocalCachePrimary(){
-  return parseJsonSafe(localStorage.getItem(LC_KEY));
-}
-function loadLegacyLocalCache(){
-  for(const key of LEGACY_CACHE_KEYS){
-    const hit = parseJsonSafe(localStorage.getItem(key));
-    if(hit) return hit;
-  }
-  return null;
-}
+function loadBackupSnapshot(){ return null; }
+function loadLocalCachePrimary(){ return null; }
+function loadLegacyLocalCache(){ return null; }
 function shouldProtectExistingCache(nextCache, existingCache){
   if(!existingCache || !nextCache) return false;
   const next = cacheCounts(nextCache), prev = cacheCounts(existingCache);
@@ -893,32 +890,9 @@ function mergeDatasets(baseData, incomingData){
     snacks: incoming.snacks || base.snacks || {morning:10,snacks:20,evening:80}
   };
 }
-function loadBestLocalCache(){
-  const primary = loadLocalCachePrimary();
-  const legacy = loadLegacyLocalCache();
-  const backup = loadBackupSnapshot();
-  const candidates = [backup, legacy, primary].filter(Boolean);
-  if(!candidates.length) return null;
-  return candidates.reduce((acc, item)=>mergeDatasets(acc, item), {employees:[], attendance:[], advances:[], snacks:{morning:10,snacks:20,evening:80}});
-}
-function saveLocalCache(opts={}){
-  try{
-    const cache = buildCacheSnapshot();
-    const currentPrimary = loadLocalCachePrimary();
-    if(opts.backupCurrent && currentPrimary) saveBackupSnapshot(currentPrimary, opts.backupReason || 'pre-write');
-    if(currentPrimary && !opts.allowSmallerOverwrite && shouldProtectExistingCache(cache, currentPrimary)){
-      saveBackupSnapshot(currentPrimary, 'protected-richer-cache');
-      console.warn('Refused to overwrite richer local cache with smaller dataset');
-      return false;
-    }
-    const stamped = stampCache(cache, {reason: opts.reason || 'save'});
-    localStorage.setItem(LC_KEY, JSON.stringify(stamped));
-    return true;
-  }catch(_){ return false; }
-}
-function getBackupArchive(){
-  return parseJsonSafe(localStorage.getItem(LC_BACKUP_ARCHIVE_KEY)) || [];
-}
+function loadBestLocalCache(){ return null; }
+function saveLocalCache(opts={}){ clearCloudOnlyCache(); return false; }
+function getBackupArchive(){ return []; }
 async function syncDatasetToCloud(data){
   const dataset = data || buildCacheSnapshot();
   const empRows = ensureArray(dataset.employees);
@@ -936,80 +910,35 @@ async function syncDatasetToCloud(data){
   }
 }
 async function restoreLatestBackup(){
-  const archive = getBackupArchive();
-  const backup = archive[0] || loadBackupSnapshot();
-  if(!backup){
-    toast('No local backup found on this browser/device','err');
-    return;
-  }
-  const counts = cacheCounts(backup);
-  const msg = `Restore latest backup?
-Employees: ${counts.employees}
-Attendance rows: ${counts.attendance}
-Advances: ${counts.advances}`;
-  if(!confirm(msg)) return;
-  parseAll(backup);
-  saveLocalCache({reason:'manual-restore', allowSmallerOverwrite:true});
-  updateCounts(); renderDashboard(); renderEmpTable(); renderAtt(); renderPayroll(); renderOT(); renderReports();
-  try{
-    setPill('busy','Restoring backup…');
-    await syncDatasetToCloud(backup);
-    setPill('ok','Backup restored ✓');
-    toast('✓ Backup restored to local and cloud','ok');
-  }catch(e){
-    setPill('err','Restore saved locally');
-    toast('Backup restored locally. Cloud sync failed: '+e.message,'err');
-  }
+  clearCloudOnlyCache();
+  toast('Cloud-only mode is enabled. Local restore is disabled.','err');
 }
 /* ══════════════════════════════════════════════════════════════
    BOOT — offline-first: load from cache instantly, sync in bg
 ══════════════════════════════════════════════════════════════ */
 async function boot(silent=false) {
+  clearCloudOnlyCache();
   const seedNeedsApply = (()=>{ try{return localStorage.getItem(EMP_MASTER_VERSION_KEY)!==CURRENT_EMPLOYEE_MASTER_VERSION;}catch(_){return true;} })();
-
-  // Step 1: load the best local copy first (primary / legacy / backup)
-  const localBest = loadBestLocalCache();
-  if(localBest){
-    parseAll(localBest);
-    updateCounts(); renderDashboard();
-    setPill('busy','Syncing…');
-    if(!silent) toast('📦 Loaded local data — checking cloud history…');
-  } else {
-    parseAll({employees: CURRENT_EMPLOYEE_MASTER, attendance:[], advances:[], snacks:{morning:10,snacks:20,evening:80}});
-    updateCounts(); renderDashboard();
-    setPill('busy', seedNeedsApply ? 'Updating employee master…' : 'Connecting…');
-  }
-
-  // Step 2: merge cloud + local so partial loads never wipe history
   try {
+    setPill('busy', seedNeedsApply ? 'Connecting…' : 'Syncing…');
     const remoteData = await gasGet({action:'getAll'});
-    let merged = mergeDatasets(localBest || {}, remoteData || {});
-
-    if(seedNeedsApply){
-      const existingById = new Map((merged.employees||[]).map(r=>[+r.id, {...r}]));
-      CURRENT_EMPLOYEE_MASTER.forEach(r=>{
-        const id = +r.id;
-        existingById.set(id, {...existingById.get(id), ...r, id, status:'ACTIVE'});
-      });
-      merged.employees = [...existingById.values()].sort((a,b)=>(+a.id||0)-(+b.id||0));
+    const data = remoteData || {employees:[], attendance:[], advances:[], snacks:{morning:10,snacks:20,evening:80}};
+    if(seedNeedsApply && !(data.employees||[]).length){
       try{
         await gasGet({action:'saveAllEmployees', rows:CURRENT_EMPLOYEE_MASTER});
         localStorage.setItem(EMP_MASTER_VERSION_KEY, CURRENT_EMPLOYEE_MASTER_VERSION);
-        if(!silent) toast('✓ Employee list merged from CSV','ok');
-      }catch(seedErr){
-        console.warn('Employee master sync warning:', seedErr.message);
-        if(!silent) toast('⚠ Employee CSV merged locally. Cloud employee sync needs table compatibility.','err');
-      }
+        data.employees = [...CURRENT_EMPLOYEE_MASTER];
+      }catch(_){}
     }
-
-    parseAll(merged);
-    saveLocalCache({reason:'boot-merge', allowSmallerOverwrite:false});
+    parseAll(data);
+    updateCounts(); renderDashboard(); renderEmpTable(); renderAtt(); renderPayroll(); renderOT(); renderReports();
     setPill('ok','Synced ✓');
-    updateCounts(); renderDashboard();
-    if(!silent) toast('✓ History merged safely','ok');
+    if(!silent) toast('✓ Loaded fresh cloud data','ok');
   } catch(e) {
-    setPill('err', localBest ? 'Offline (local copy)' : 'No connection');
-    if(!silent) toast('⚠ Supabase: '+e.message+' — using local copy','err');
+    parseAll({employees: [], attendance: [], advances: [], snacks:{morning:10,snacks:20,evening:80}});
+    updateCounts(); renderDashboard(); renderEmpTable(); renderAtt(); renderPayroll(); renderOT(); renderReports();
+    setPill('err','Cloud sync failed');
+    if(!silent) toast('Cloud sync failed: '+e.message,'err');
   }
 }
 
@@ -1114,9 +1043,7 @@ function mealCost(entry){
   const e=entry||{};
   return num(e.tea)*num(SNK.tea) + num(e.snacks)*num(SNK.snacks) + num(e.dinner)*num(SNK.dinner);
 }
-function saveMealStore(){
-  try{ localStorage.setItem(MEAL_KEY, JSON.stringify(MEALS)); }catch(_){}
-}
+function saveMealStore(){ clearCloudOnlyCache(); }
 function mealTotalForDate(date){ return mealCost(mealEntry(date)); }
 function mealTotalForMonth(month){
   return Object.entries(MEALS).reduce((s,[d,e])=>s+(d.startsWith(month)?mealCost(e):0),0);
@@ -2833,14 +2760,7 @@ boot();
     const snackEl=document.getElementById('t-s'); if(snackEl) snackEl.value=SNK.snacks;
     const dinnerEl=document.getElementById('t-d'); if(dinnerEl) dinnerEl.value=SNK.dinner;
 
-    // Merge cloud meal_logs on top of existing in-memory MEALS — never wipe
-    // Load localStorage meals first as base so nothing is lost if cloud returns empty
-    try{
-      const lsMeals = JSON.parse(localStorage.getItem(MEAL_KEY) || '{}') || {};
-      Object.entries(lsMeals).forEach(([d,e])=>{
-        if(!MEALS[d]) MEALS[d] = {tea:+e.tea||0, snacks:+e.snacks||0, dinner:+e.dinner||0};
-      });
-    }catch(_){}
+    MEALS = {};
     if(mealRows.length){
       mealRows.forEach(r=>{
         const d = String(r.log_date || r.date || '').slice(0,10); if(!d) return;
@@ -2853,14 +2773,33 @@ boot();
     saveMealStore();
   }
 
-  const _oldGetAll = getAllFromSupabase;
+  async function fetchAllRows(tableName, orderers=[], pageSize=1000){
+    const out = [];
+    for(let start=0;; start+=pageSize){
+      let q = getSupabase().from(tableName).select('*').range(start, start + pageSize - 1);
+      orderers.forEach(o=>{ q = q.order(o.column, {ascending:o.ascending !== false}); });
+      const rows = await sb(q, 'Load ' + tableName);
+      if(Array.isArray(rows) && rows.length) out.push(...rows);
+      if(!Array.isArray(rows) || rows.length < pageSize) break;
+    }
+    return out;
+  }
+
   getAllFromSupabase = async function(){
-    const base = await _oldGetAll();
-    let mealLogs = [];
-    try{
-      mealLogs = await sb(getSupabase().from('meal_logs').select('*').order('log_date', {ascending:true}), 'Load meal logs');
-    }catch(_){ mealLogs = []; }
-    return { ...base, meal_logs: Array.isArray(mealLogs) ? mealLogs : [] };
+    const [employees, attendance, advances, snacks, mealLogs] = await Promise.all([
+      fetchAllRows(TABLES.EMP, [{column:'id', ascending:true}]),
+      fetchAllRows(TABLES.ATT, [{column:'date', ascending:true}, {column:'employee_id', ascending:true}]),
+      fetchAllRows(TABLES.ADV, [{column:'month', ascending:true}, {column:'employee_id', ascending:true}]),
+      fetchAllRows(TABLES.SNK, [{column:'id', ascending:true}]),
+      fetchAllRows('meal_logs', [{column:'log_date', ascending:true}]).catch(()=>[])
+    ]);
+    return {
+      employees: Array.isArray(employees) ? employees : [],
+      attendance: Array.isArray(attendance) ? attendance : [],
+      advances: Array.isArray(advances) ? advances : [],
+      snacks: (Array.isArray(snacks) && snacks[0]) ? snacks[0] : {morning:10, evening:80, snacks:20},
+      meal_logs: Array.isArray(mealLogs) ? mealLogs : []
+    };
   };
 
   const _oldGasGet = gasGet;
@@ -2904,35 +2843,29 @@ boot();
 
   boot = async function(silent=false){
     if(!LIVE_STATE.currentUser){ showLiveLogin(); return; }
-
-    // Step 1: immediately render local cache so count never drops while cloud loads
-    const localBest = loadBestLocalCache();
-    if(localBest){
-      parseScoped(localBest);
-      applyChrome();
-      updateCounts(); renderDashboard(); renderEmpTable(); renderAtt(); renderPayroll(); renderOT(); renderReports();
-      setPill('busy','Syncing…');
-    }
-
-    // Step 2: fetch cloud and MERGE with local — never let scoped cloud wipe more employees
+    clearCloudOnlyCache();
     try{
+      setPill('busy','Syncing…');
       const remoteData = await getAllFromSupabase();
-      // Merge: local is base so employees missing unit_name in Supabase are kept
-      const merged = mergeDatasets(localBest || {}, remoteData || {});
-      // Auto-fix employees that have no unit_name in Supabase by pushing DEFAULT_UNIT back
       const noUnit = (remoteData.employees || []).filter(r => !String(r.unit_name || r.unit || '').trim());
       if(noUnit.length){
         const fixed = noUnit.map(r => ({...r, unit_name: DEFAULT_UNIT}));
         try{ await _oldGasGet({action:'saveAllEmployees', rows: fixed}); }catch(_){}
+        fixed.forEach(row=>{
+          const idx = (remoteData.employees || []).findIndex(x => Number(x.id) === Number(row.id));
+          if(idx >= 0) remoteData.employees[idx] = row;
+        });
       }
-      parseScoped(merged);
-      saveLocalCache({reason:'live-boot-sync', allowSmallerOverwrite:true});
+      parseScoped(remoteData || {employees:[], attendance:[], advances:[], snacks:{morning:10, evening:80, snacks:20}, meal_logs:[]});
       applyChrome();
       updateCounts(); renderDashboard(); renderEmpTable(); renderAtt(); renderPayroll(); renderOT(); renderReports();
       setPill('ok','Synced ✓');
-      if(!silent) toast('✓ Live data synced','ok');
+      if(!silent) toast('✓ Fresh cloud data loaded','ok');
     }catch(e){
-      setPill('err', localBest ? 'Offline (local copy)' : 'Error');
+      parseScoped({employees:[], attendance:[], advances:[], snacks:{morning:10, evening:80, snacks:20}, meal_logs:[]});
+      applyChrome();
+      updateCounts(); renderDashboard(); renderEmpTable(); renderAtt(); renderPayroll(); renderOT(); renderReports();
+      setPill('err','Cloud sync failed');
       if(!silent) toast('⚠ ' + e.message,'err');
       console.error(e);
     }
@@ -3007,11 +2940,9 @@ boot();
       renderAtt(); renderDashboard(); renderPayroll(); renderOT(); renderReports();
       toast(`✓ Attendance saved for ${date}`,'ok');
     }catch(e){
-      ATT_DIRTY=false; EDITS={};
-      saveLocalCache({reason:'attendance-local-save', allowSmallerOverwrite:true, backupCurrent:true, backupReason:'before-att-local-save'});
-      saveMealStore();
+      setPill('err','Cloud save failed');
       renderAtt(); renderDashboard();
-      toast(`📦 Saved locally — will sync when connected`,'i');
+      toast(`Cloud save failed. Attendance was not saved to cloud.`,'err');
     }
   };
 
@@ -3024,12 +2955,12 @@ boot();
       await gasGet({action:'saveAdvance',month:mo,employee_id:eid,employee_name:name,amount:num(val),unit_name:unit});
       setPill('ok','Synced ✓');
     }catch(e){
-      setPill('err','Offline'); toast('📦 Advance saved locally','i');
+      setPill('err','Cloud save failed'); toast('Advance was not saved to cloud','err');
     }
     renderPayroll();
   };
 
-  saveMealStore = function(){ try{ localStorage.setItem(MEAL_KEY, JSON.stringify(MEALS)); }catch(_){} };
+  saveMealStore = function(){ clearCloudOnlyCache(); };
   saveMealEntry = async function(){
     const date=document.getElementById('meal-date').value || todayS();
     const unit = LIVE_STATE.currentUser.role==='md_admin' ? (LIVE_STATE.mdScope==='ALL' ? '' : LIVE_STATE.mdScope) : LIVE_STATE.currentUser.unit;
@@ -3037,18 +2968,18 @@ boot();
     const tea = +(document.getElementById('meal-tea').value||0);
     const snacks = +(document.getElementById('meal-snacks').value||0);
     const dinner = +(document.getElementById('meal-dinner').value||0);
-    // Update MEALS in memory immediately — data is never lost even if Supabase fails
+    const prev = {...(MEALS[date] || {tea:0, snacks:0, dinner:0})};
     if(!MEALS[date]) MEALS[date] = {tea:0, snacks:0, dinner:0};
     MEALS[date] = {tea, snacks, dinner};
-    saveMealStore();
     setPill('busy','Saving food…');
     try{
       await gasGet({action:'saveMealLog',log_date:date,unit_name:unit,tea,snacks,dinner});
       setPill('ok','Synced ✓');
       toast('✓ Daily food entry saved for ' + unit,'ok');
     }catch(e){
-      setPill('err','Offline');
-      toast('📦 Food entry saved locally — will sync when connected','i');
+      MEALS[date] = prev;
+      setPill('err','Cloud save failed');
+      toast('Food entry was not saved to cloud','err');
     }
     renderSnacks(); renderDashboard();
   };
