@@ -162,6 +162,10 @@ label{font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:var(--mu
 
 /* Separate Department Payout tab + freeze table headers */
 #pg-payroll .scrollable,#pg-deptpayroll .scrollable{max-height:calc(100vh - 250px);overflow:auto;}
+#pg-payroll tr.pay-row-selected td{background:#fff8f0!important;}
+#pg-payroll .pay-chk{width:15px;height:15px;accent-color:#f97316;cursor:pointer;}
+#pg-payroll .remark-inp{width:130px;font-size:11px;padding:3px 7px;border-radius:5px;border:1px solid #d1d5db;background:#fff;color:var(--text);font-family:inherit;}
+#pg-payroll .remark-inp:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 2px rgba(245,166,35,.12);}
 #pg-payroll table.tbl thead th,#pg-deptpayroll table.tbl thead th{position:sticky;top:0;z-index:6;background:#f9fafb;box-shadow:0 1px 0 var(--border);}
 #pg-deptpayroll #dept-month-payout-card{margin-bottom:14px;}
 #pg-deptpayroll .card-hdr{position:sticky;top:0;background:#fff;z-index:8;}
@@ -197,7 +201,7 @@ label{font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:var(--mu
   <div class="s-sec">
     <div class="s-lbl">Tools</div>
     <button class="nav" onclick="goTo('sheetimport',this)">📋 &nbsp;Daily Sheet Import</button>
-    <button class="nav" onclick="goTo('outstation',this)">🛣 &nbsp;Outstation Bulk</button>
+    <button class="nav" onclick="goTo('outstation',this);initOutstationBulk()">🛣 &nbsp;Outstation Bulk</button>
     <button class="nav" onclick="goTo('import',this)">📥 &nbsp;Import Excel</button>
     <button class="nav" onclick="goTo('reports',this)">📊 &nbsp;Reports</button>
   </div>
@@ -341,19 +345,36 @@ label{font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:var(--mu
           <label style="margin:0;font-size:11px;text-transform:none;letter-spacing:0;color:var(--muted)">Days</label>
           <input type="number" id="pay-days" value="31" style="width:55px" readonly title="Auto based on selected month">
           <button class="btn btn-sm" onclick="fillBlankAdvances50()" title="Fill only blank advance cells with 50% of salary">⚡ Fill Blank 50%</button>
-          <button class="btn btn-p btn-sm" onclick="exportAdvanceExcel()">⬇ Export Advance Excel</button>
+          <button class="btn btn-sm" onclick="payrollSelectAll(true)">☑ All</button>
+          <button class="btn btn-sm" onclick="payrollSelectAll(false)">☐ None</button>
+          <span id="pay-sel-badge" style="font-size:11px;color:var(--muted);padding:0 4px"></span>
+          <button class="btn btn-p btn-sm" onclick="exportPayrollExcel()">⬇ Export Selected Excel</button>
         </div>
       </div>
       <div class="scrollable">
         <table class="tbl">
-          <thead><tr><th>#</th><th style="min-width:130px">Name</th><th>Shift</th><th>Days</th><th>OT Hrs</th><th>Salary (₹)</th><th>OT Amt (₹)</th><th>Food (Co.)</th><th>Max Advance</th><th>Advance (₹)</th><th>Old Balance / Adj. (₹)</th><th>Extra Allowance (₹)</th><th>Net Pay (₹)</th><th>Total Cost (₹)</th></tr></thead>
+          <thead><tr>
+            <th style="width:32px"><input type="checkbox" id="pay-chk-all" onchange="payrollSelectAll(this.checked)" title="Select all"></th>
+            <th>#</th>
+            <th style="min-width:130px">Name</th>
+            <th>Department</th>
+            <th>Salary (₹)</th>
+            <th>Shift</th>
+            <th>Days</th>
+            <th>OT Hrs</th>
+            <th>Salary Amt (₹)</th>
+            <th>OT Amt (₹)</th>
+            <th>Advance (₹)</th>
+            <th>Old Bal / Adj. (₹)</th>
+            <th>Extra Allow. (₹)</th>
+            <th>Net Pay (₹)</th>
+            <th style="min-width:120px">Remarks</th>
+          </tr></thead>
           <tbody id="pay-tbody"></tbody>
-          <tfoot><tr class="tfr" id="pay-tfoot"><td colspan="14" style="text-align:center;color:var(--muted);padding:10px">Select month above</td></tr></tfoot>
+          <tfoot><tr class="tfr" id="pay-tfoot"><td colspan="15" style="text-align:center;color:var(--muted);padding:10px">Select month above</td></tr></tfoot>
         </table>
       </div>
     </div>
-
-
   </div>
 
   <!-- DEPARTMENT PAYOUT -->
@@ -1050,13 +1071,11 @@ async function boot(silent=false) {
     }
     parseAll(data);
     updateCounts(); renderDashboard(); renderEmpTable(); renderAtt(); renderPayroll(); renderOT(); renderReports();
-    if(typeof renderOutstationBulk==='function') try{ renderOutstationBulk(); }catch(_){}
     setPill('ok','Synced ✓');
     if(!silent) toast('✓ Loaded fresh cloud data','ok');
   } catch(e) {
     parseAll({employees: [], attendance: [], advances: [], snacks:{morning:10,snacks:20,evening:80}});
     updateCounts(); renderDashboard(); renderEmpTable(); renderAtt(); renderPayroll(); renderOT(); renderReports();
-    if(typeof renderOutstationBulk==='function') try{ renderOutstationBulk(); }catch(_){}
     setPill('err','Cloud sync failed');
     if(!silent) toast('Cloud sync failed: '+e.message,'err');
   }
@@ -1879,80 +1898,116 @@ async function saveAtt(){
 ══════════════════════════════════════════════════════════════ */
 function renderPayroll(){
   const pmEl=document.getElementById('pay-month');
-  if(!pmEl.value)pmEl.value=new Date().toISOString().slice(0,7);
-  const mo=pmEl.value,dim=daysInMonth(mo),foodMonth=mealTotalForMonth(mo);
-  document.getElementById('pay-days').value = dim;
+  if(!pmEl.value) pmEl.value=new Date().toISOString().slice(0,7);
+  const mo=pmEl.value, dim=daysInMonth(mo);
+  document.getElementById('pay-days').value=dim;
   const rowsData=payrollAdvanceRows(mo);
-  let tS=0,tO=0,tFood=foodMonth,tMax=0,tA=0,tOld=0,tExtra=0,tP=0,tC=0,rows='';
+  // preserve existing checkbox states by eid
+  const prevChecked=new Set();
+  document.querySelectorAll('#pay-tbody .pay-chk:checked').forEach(cb=>prevChecked.add(Number(cb.dataset.eid)));
+  let tSalary=0,tO=0,tA=0,tOld=0,tExtra=0,tP=0,rows='';
   rowsData.forEach((r,i)=>{
     const e=r.emp;
-    const cost=r.net;
-    tS+=r.sal;tO+=r.ota;tMax+=r.maxAdvance;tA+=r.adv;tOld+=r.oldBalance;tExtra+=r.extraAllowance;tP+=r.net;tC+=cost;
-    rows+=`<tr>
-      <td class="cm">${i+1}</td><td style="font-weight:500;font-size:11px">${e.name}</td>
+    const dept=String(e.dept||e.department||'').trim()||'—';
+    const chk=prevChecked.size ? prevChecked.has(e.id) : true; // default all selected
+    tSalary+=r.sal; tO+=r.ota; tA+=r.adv; tOld+=r.oldBalance; tExtra+=r.extraAllowance; tP+=r.net;
+    const nameSafe=e.name.replace(/'/g,"\\'");
+    rows+=`<tr class="${chk?'pay-row-selected':''}">
+      <td style="text-align:center"><input type="checkbox" class="pay-chk" data-eid="${e.id}" ${chk?'checked':''} onchange="payrollChkChange(this)"></td>
+      <td class="cm">${i+1}</td>
+      <td style="font-weight:500;font-size:11px">${e.name}</td>
+      <td style="font-size:11px;color:var(--muted)">${dept}</td>
+      <td class="mono cm">₹${fmt(e.salary)}</td>
       <td><span class="badge b${e.shift}">${e.shift}h</span></td>
-      <td style="text-align:center"><button class="btn btn-sm" onclick="openEmpAttendanceModal('${mo}',${e.id},'${e.name.replace(/'/g,"\'")}')">${r.daysP}</button></td><td style="text-align:center">${r.oth>0?'+':''}${r.oth.toFixed(1)}</td>
-      <td class="mono">₹${fmt(r.sal)}</td><td class="mono ca">${r.ota!==0?(r.ota>0?'₹'+fmt(r.ota):'-₹'+fmt(Math.abs(r.ota))):'—'}</td>
-      <td class="mono cg">—</td>
-      <td class="mono cm">₹${fmt(r.maxAdvance)}</td>
-      <td><input class="adv-inp" type="number" min="0" max="${r.maxAdvance}" value="${r.adv}" onchange="setAdv('${mo}',${e.id},'${e.name.replace(/'/g,"\'")} ',this.value)"></td>
-      <td><input class="pay-adj-inp" type="number" value="${r.oldBalance}" title="Use positive for old pending balance, negative for deduction" onchange="setPayrollAdjustment('${mo}',${e.id},'${e.name.replace(/'/g,"\'")} ','old_balance',this.value)"></td>
-      <td><input class="pay-adj-inp" type="number" min="0" value="${r.extraAllowance}" onchange="setPayrollAdjustment('${mo}',${e.id},'${e.name.replace(/'/g,"\'")} ','extra_allowance',this.value)"></td>
-      <td class="mono" style="font-weight:500">₹${fmt(r.net)}</td>
-      <td class="mono cb" style="font-weight:500">₹${fmt(cost)}</td>
+      <td style="text-align:center"><button class="btn btn-sm" onclick="openEmpAttendanceModal('${mo}',${e.id},'${nameSafe}')">${r.daysP}</button></td>
+      <td style="text-align:center">${r.oth>0?'+':''}${r.oth.toFixed(1)}</td>
+      <td class="mono">₹${fmt(r.sal)}</td>
+      <td class="mono ca">${r.ota!==0?(r.ota>0?'₹'+fmt(r.ota):'-₹'+fmt(Math.abs(r.ota))):'—'}</td>
+      <td><input class="adv-inp" type="number" min="0" max="${r.maxAdvance}" value="${r.adv}" onchange="setAdv('${mo}',${e.id},'${nameSafe}',this.value)"></td>
+      <td><input class="pay-adj-inp" type="number" value="${r.oldBalance}" title="Positive=pending balance, Negative=deduction" onchange="setPayrollAdjustment('${mo}',${e.id},'${nameSafe}','old_balance',this.value)"></td>
+      <td><input class="pay-adj-inp" type="number" min="0" value="${r.extraAllowance}" onchange="setPayrollAdjustment('${mo}',${e.id},'${nameSafe}','extra_allowance',this.value)"></td>
+      <td class="mono" style="font-weight:600;color:var(--green)">₹${fmt(r.net)}</td>
+      <td><input style="width:110px;font-size:11px;padding:3px 6px;border-radius:5px" type="text" placeholder="—" value="${(window.PAYROLL_REMARKS&&window.PAYROLL_REMARKS[mo]&&window.PAYROLL_REMARKS[mo][e.id])||''}" onchange="setPayrollRemark('${mo}',${e.id},this.value)"></td>
     </tr>`;
   });
-  const grandCost=tC+tFood;
   document.getElementById('pay-tbody').innerHTML=rows;
   document.getElementById('pay-tfoot').innerHTML=`
-    <td colspan="5">TOTAL</td>
-    <td class="mono">₹${fmt(tS)}</td><td class="mono ca">${tO!==0?(tO>0?'₹'+fmt(tO):'-₹'+fmt(Math.abs(tO))):'—'}</td>
-    <td class="mono cg">₹${fmt(tFood)}</td><td class="mono cm">₹${fmt(tMax)}</td><td class="mono">₹${fmt(tA)}</td>
+    <td></td><td colspan="5">TOTAL (${rowsData.length} employees)</td>
+    <td></td><td></td>
+    <td class="mono">₹${fmt(tSalary)}</td>
+    <td class="mono ca">${tO!==0?(tO>0?'₹'+fmt(tO):'-₹'+fmt(Math.abs(tO))):'—'}</td>
+    <td class="mono">₹${fmt(tA)}</td>
     <td class="mono">${tOld<0?'-₹'+fmt(Math.abs(tOld)):'₹'+fmt(tOld)}</td>
     <td class="mono cg">₹${fmt(tExtra)}</td>
-    <td class="mono" style="font-size:13px">₹${fmt(tP)}</td>
-    <td class="mono cb" style="font-size:13px">₹${fmt(grandCost)}</td>`;
+    <td class="mono" style="font-size:13px;color:var(--green)">₹${fmt(tP)}</td>
+    <td></td>`;
   document.getElementById('pay-stats').innerHTML=`
     <div class="stat-card"><div class="stat-label">Net Payroll</div><div class="stat-val" style="font-size:17px">₹${fmt(tP)}</div></div>
     <div class="stat-card"><div class="stat-label">Advance Total</div><div class="stat-val sv-a" style="font-size:17px">₹${fmt(tA)}</div></div>
     <div class="stat-card"><div class="stat-label">Old Balance + Allowance</div><div class="stat-val sv-g" style="font-size:17px">₹${fmt(tOld+tExtra)}</div></div>
-    <div class="stat-card"><div class="stat-label">Total Cost</div><div class="stat-val sv-b" style="font-size:17px">₹${fmt(grandCost)}</div></div>`;
+    <div class="stat-card"><div class="stat-label">Salary Amount</div><div class="stat-val sv-b" style="font-size:17px">₹${fmt(tSalary)}</div></div>`;
+  payrollUpdateSelBadge();
 }
-async function saveAdvanceRecord(mo,eid,name){
-  const rec=normalizeAdvanceRecord((ADVS[mo]||{})[eid]);
-  try{
-    await gasGet({
-      action:'saveAdvance',
-      employee_id:eid,
-      employee_name:name,
-      month:mo,
-      amount:rec.amount,
-      old_balance:rec.old_balance,
-      extra_allowance:rec.extra_allowance,
-      unit_name:(EMPS.find(e=>e.id===eid)||{}).unit
-    });
-  }catch(e){toast('⚠ Payroll adjustment not saved to cloud: '+e.message,'err');}
+window.PAYROLL_REMARKS = window.PAYROLL_REMARKS || {};
+function setPayrollRemark(mo, eid, val){
+  if(!window.PAYROLL_REMARKS[mo]) window.PAYROLL_REMARKS[mo]={};
+  window.PAYROLL_REMARKS[mo][eid]=val.trim();
 }
-async function setAdv(mo,eid,name,val){
-  const emp=EMPS.find(e=>e.id===eid);
-  const max=advanceLimit(emp);
-  let amt=Math.max(0,+val||0);
-  if(amt>max){ amt=max; toast('Advance capped at 50% salary for '+name,'err'); }
-  setAdvanceRecord(mo,eid,{amount:amt});
-  saveLocalCache({reason:'advance-save', backupCurrent:true, backupReason:'before-advance-save'});
-  renderPayroll();
-  await saveAdvanceRecord(mo,eid,name);
+function payrollChkChange(cb){
+  const tr=cb.closest('tr');
+  if(tr) tr.classList.toggle('pay-row-selected', cb.checked);
+  const all=document.querySelectorAll('#pay-tbody .pay-chk');
+  const checked=document.querySelectorAll('#pay-tbody .pay-chk:checked');
+  const allChk=document.getElementById('pay-chk-all');
+  if(allChk) allChk.indeterminate=(checked.length>0&&checked.length<all.length), allChk.checked=(checked.length===all.length);
+  payrollUpdateSelBadge();
 }
-async function setPayrollAdjustment(mo,eid,name,field,val){
-  const n=+val||0;
-  if(field==='old_balance') setAdvanceRecord(mo,eid,{old_balance:n});
-  if(field==='extra_allowance') setAdvanceRecord(mo,eid,{extra_allowance:Math.max(0,n)});
-  saveLocalCache({reason:'payroll-adjustment-save', backupCurrent:true, backupReason:'before-payroll-adjustment-save'});
-  renderPayroll();
-  await saveAdvanceRecord(mo,eid,name);
+function payrollSelectAll(checked){
+  document.querySelectorAll('#pay-tbody .pay-chk').forEach(cb=>{
+    cb.checked=!!checked;
+    const tr=cb.closest('tr'); if(tr) tr.classList.toggle('pay-row-selected',!!checked);
+  });
+  const allChk=document.getElementById('pay-chk-all');
+  if(allChk){ allChk.checked=!!checked; allChk.indeterminate=false; }
+  payrollUpdateSelBadge();
 }
-
-
+function payrollUpdateSelBadge(){
+  const total=document.querySelectorAll('#pay-tbody .pay-chk').length;
+  const sel=document.querySelectorAll('#pay-tbody .pay-chk:checked').length;
+  const badge=document.getElementById('pay-sel-badge');
+  if(badge) badge.textContent=sel===total?`All ${total} selected`:`${sel} of ${total} selected`;
+}
+function exportPayrollExcel(){
+  const mo=document.getElementById('pay-month').value||new Date().toISOString().slice(0,7);
+  const rowsData=payrollAdvanceRows(mo);
+  const selectedEids=new Set([...document.querySelectorAll('#pay-tbody .pay-chk:checked')].map(cb=>Number(cb.dataset.eid)));
+  if(!selectedEids.size){ toast('Select at least one employee to export','err'); return; }
+  const filtered=rowsData.filter(r=>selectedEids.has(r.emp.id));
+  const bankRows=filtered.map((r,i)=>({
+    'SN': i+1,
+    'Name': r.emp.name,
+    'Department': String(r.emp.dept||r.emp.department||'').trim()||'',
+    'Salary': r.emp.salary,
+    'Shift': (r.emp.shift||8)+'h',
+    'Days': r.daysP,
+    'OT Hrs': r.oth,
+    'Salary Amt': r.sal,
+    'OT Amt': r.ota,
+    'Advance': r.adv,
+    'Old Balance / Adj. Extra Allowance': r.oldBalance + r.extraAllowance,
+    'Net Pay': r.net,
+    'Remarks': (window.PAYROLL_REMARKS&&window.PAYROLL_REMARKS[mo]&&window.PAYROLL_REMARKS[mo][r.emp.id])||'',
+    'Bank Details': r.bank||'',
+    'IFSC': r.ifsc||''
+  }));
+  if(!window.XLSX){ toast('Excel library not loaded. Check internet and refresh.','err'); return; }
+  const colW=[{wch:5},{wch:26},{wch:16},{wch:10},{wch:7},{wch:7},{wch:8},{wch:12},{wch:12},{wch:12},{wch:28},{wch:12},{wch:20},{wch:24},{wch:14}];
+  const ws=XLSX.utils.json_to_sheet(bankRows); ws['!cols']=colW;
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Payroll '+mo);
+  XLSX.writeFile(wb, 'Payroll_'+mo+(selectedEids.size<rowsData.length?'_partial':'')+'.xlsx');
+  toast(`Exported ${filtered.length} employee(s) to Excel`,'ok');
+}
 function punctualityBadgeForRecord(rec, shift){
   const inTime = String(rec?.in_time || '').trim();
   if(!inTime) return '<span class="badge bh">—</span>';
@@ -3428,19 +3483,7 @@ boot();
     if(document.getElementById('dept-cost-modal')?.style.display==='flex') renderDeptCostModal();
   };
 
-  renderPayroll = function(){
-    const mo=document.getElementById('pay-month').value||new Date().toISOString().slice(0,7), days=daysInMonth(mo); document.getElementById('pay-days').value=days;
-    const mealMonth = mealTotalForMonth(mo);
-    const payRows=payrollAdvanceRows(mo).map(r=>{ const food = EMPS.length ? Math.round(mealMonth/EMPS.length) : 0; return {...r,e:r.emp,food,total:r.payable+food}; });
-    document.getElementById('pay-tbody').innerHTML=payRows.map((r,i)=>`<tr><td class="cm">${i+1}</td><td style="font-weight:500">${r.e.name}${isMdAll()?`<span class="unit-subline">${esc(r.e.unit)}</span>`:''}</td><td><span class="badge b${r.e.shift}">${r.e.shift}h</span></td><td><button class="btn btn-sm" onclick="openEmpAttendanceModal('${mo}',${r.e.id},'${r.e.name.replace(/'/g,"\'")}')">${r.daysP}</button></td><td>${r.oth||0}</td><td class="mono">₹${fmt(r.sal)}</td><td class="mono ca">₹${fmt(r.ota)}</td><td class="mono cg">₹${fmt(r.food)}</td><td class="mono cm">₹${fmt(r.maxAdvance)}</td><td><input class="adv-inp" type="number" min="0" max="${r.maxAdvance}" value="${r.adv}" onblur="setAdv('${mo}',${r.e.id},'${r.e.name.replace(/'/g,"\'")} ',this.value)"></td><td class="mono" style="font-weight:600">₹${fmt(r.net)}</td><td class="mono">₹${fmt(r.total)}</td></tr>`).join('');
-    const T=payRows.reduce((a,b)=>({daysP:a.daysP+b.daysP,oth:a.oth+b.oth,sal:a.sal+b.sal,ota:a.ota+b.ota,food:a.food+b.food,maxAdvance:a.maxAdvance+b.maxAdvance,adv:a.adv+b.adv,net:a.net+b.net,total:a.total+b.total}),{daysP:0,oth:0,sal:0,ota:0,food:0,maxAdvance:0,adv:0,net:0,total:0});
-    document.getElementById('pay-tfoot').innerHTML=`<td colspan="3">Total</td><td>${T.daysP}</td><td>${Math.round(T.oth*100)/100}</td><td>₹${fmt(T.sal)}</td><td>₹${fmt(T.ota)}</td><td>₹${fmt(T.food)}</td><td>₹${fmt(T.maxAdvance)}</td><td>₹${fmt(T.adv)}</td><td>₹${fmt(T.net)}</td><td>₹${fmt(T.total)}</td>`;
-    document.getElementById('pay-stats').innerHTML=`
-      <div class="stat-card"><div class="stat-label">Net Payroll</div><div class="stat-val" style="font-size:17px">₹${fmt(T.net)}</div></div>
-      <div class="stat-card"><div class="stat-label">Advance Total</div><div class="stat-val sv-a" style="font-size:17px">₹${fmt(T.adv)}</div></div>
-      <div class="stat-card"><div class="stat-label">Food / Canteen</div><div class="stat-val sv-g" style="font-size:17px">₹${fmt(T.food)}</div></div>
-      <div class="stat-card"><div class="stat-label">Total Cost</div><div class="stat-val sv-b" style="font-size:17px">₹${fmt(T.total)}</div></div>`;
-  };
+  // renderPayroll is defined globally — do not override here
 
   renderOT = function(){
     const mo=document.getElementById('ot-month').value||new Date().toISOString().slice(0,7); const rows=EMPS.map(e=>{ const ds=daInMo(mo); let daysP=0,oth=0; ds.forEach(([_,m])=>{const r=m[e.id]; if(r?.status==='P')daysP++; if(r && r.status!=='H') oth+=num(r.ot);}); const rate=Math.round(otRatePerHour(e.salary,mo,e.shift)*100)/100,amt=Math.round(rate*oth); return {e,daysP,oth:+oth.toFixed(2),rate,amt}; });
@@ -3690,41 +3733,51 @@ boot();
     const pmEl=document.getElementById('pay-month');
     if(!pmEl) return;
     if(!pmEl.value) pmEl.value=new Date().toISOString().slice(0,7);
-    const mo=pmEl.value, dim=daysInMonth(mo), foodMonth=mealTotalForMonth(mo), foodPerEmp=foodShareForEmployee(mo);
+    const mo=pmEl.value, dim=daysInMonth(mo);
     const payDaysEl=document.getElementById('pay-days'); if(payDaysEl) payDaysEl.value=dim;
     const rowsData=payrollAdvanceRows(mo)||[];
-    let T={daysP:0,oth:0,sal:0,ota:0,food:0,maxAdvance:0,adv:0,old:0,extra:0,net:0,total:0};
+    // preserve checkbox states
+    const prevChecked=new Set();
+    document.querySelectorAll('#pay-tbody .pay-chk:checked').forEach(cb=>prevChecked.add(Number(cb.dataset.eid)));
+    const allWereChecked = prevChecked.size===0; // default: check all on first render
+    let T={sal:0,ota:0,adv:0,old:0,extra:0,net:0};
     const rows=rowsData.map((r,i)=>{
       const e=r.emp||{};
-      const food=foodPerEmp;
-      const total=Number(r.net||0)+food;
-      T.daysP+=Number(r.daysP||0); T.oth+=Number(r.oth||0); T.sal+=Number(r.sal||0); T.ota+=Number(r.ota||0); T.food+=food; T.maxAdvance+=Number(r.maxAdvance||0); T.adv+=Number(r.adv||0); T.old+=Number(r.oldBalance||0); T.extra+=Number(r.extraAllowance||0); T.net+=Number(r.net||0); T.total+=total;
-      return `<tr>
+      const dept=String(e.dept||e.department||'').trim()||'—';
+      const chk=allWereChecked || prevChecked.has(e.id);
+      T.sal+=Number(r.sal||0); T.ota+=Number(r.ota||0); T.adv+=Number(r.adv||0);
+      T.old+=Number(r.oldBalance||0); T.extra+=Number(r.extraAllowance||0); T.net+=Number(r.net||0);
+      const nameSafe=(e.name||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+      const remark=(window.PAYROLL_REMARKS&&window.PAYROLL_REMARKS[mo]&&window.PAYROLL_REMARKS[mo][e.id])||'';
+      return `<tr class="${chk?'pay-row-selected':''}">
+        <td style="text-align:center;padding:6px 8px"><input type="checkbox" class="pay-chk" data-eid="${e.id}" ${chk?'checked':''} onchange="payrollChkChange(this)"></td>
         <td class="cm">${i+1}</td>
-        <td><div class="emp-name">${ehtml(e.name)}${(typeof isMdAll==='function' && isMdAll())?`<span class="unit-subline">${ehtml(e.unit)}</span>`:''}</div></td>
-        <td><span class="badge b${e.shift}">${e.shift}h</span></td>
-        <td><button class="btn btn-sm" onclick="openEmpAttendanceModal('${mo}',${e.id},'${jsArg(e.name)}')">${r.daysP}</button></td>
-        <td class="mono">${Number(r.oth||0)>0?'+':''}${r.oth||0}</td>
-        <td class="mono">${money(r.sal)}</td>
-        <td class="mono ca">${Number(r.ota||0)<0?'-':''}${money(Math.abs(Number(r.ota||0)))}</td>
-        <td class="mono cg">${money(food)}</td>
-        <td class="mono cm">${money(r.maxAdvance)}</td>
-        <td><input class="adv-inp" type="number" min="0" max="${r.maxAdvance}" value="${r.adv}" onchange="setAdv('${mo}',${e.id},'${jsArg(e.name)}',this.value)"></td>
-        <td><input class="pay-adj-inp" type="number" value="${r.oldBalance}" title="Positive = old pending balance, negative = deduction" onchange="setPayrollAdjustment('${mo}',${e.id},'${jsArg(e.name)}','old_balance',this.value)"></td>
-        <td><input class="pay-adj-inp" type="number" min="0" value="${r.extraAllowance}" onchange="setPayrollAdjustment('${mo}',${e.id},'${jsArg(e.name)}','extra_allowance',this.value)"></td>
-        <td class="mono" style="font-weight:700">${money(r.net)}</td>
-        <td class="mono cb" style="font-weight:700">${money(total)}</td>
+        <td style="font-weight:500;font-size:12px;white-space:nowrap">${e.name||''}</td>
+        <td style="font-size:11px;color:var(--muted);white-space:nowrap">${dept}</td>
+        <td class="mono cm" style="font-size:11px">₹${fmt(e.salary||0)}</td>
+        <td style="text-align:center"><span class="badge b${e.shift}">${e.shift}h</span></td>
+        <td style="text-align:center"><button class="btn btn-sm" onclick="openEmpAttendanceModal('${mo}',${e.id},'${nameSafe}')">${r.daysP}</button></td>
+        <td style="text-align:center;color:var(--muted)">${Number(r.oth||0)>0?'+':''}${r.oth||0}</td>
+        <td class="mono">₹${fmt(r.sal)}</td>
+        <td class="mono ca">${Number(r.ota||0)<0?'-₹'+fmt(Math.abs(Number(r.ota||0))):(Number(r.ota||0)>0?'₹'+fmt(r.ota):'—')}</td>
+        <td><input class="adv-inp" type="number" min="0" max="${r.maxAdvance}" value="${r.adv}" onchange="setAdv('${mo}',${e.id},'${nameSafe}',this.value)"></td>
+        <td><input class="pay-adj-inp" type="number" value="${r.oldBalance}" title="Positive = pending balance, Negative = deduction" onchange="setPayrollAdjustment('${mo}',${e.id},'${nameSafe}','old_balance',this.value)"></td>
+        <td><input class="pay-adj-inp" type="number" min="0" value="${r.extraAllowance}" onchange="setPayrollAdjustment('${mo}',${e.id},'${nameSafe}','extra_allowance',this.value)"></td>
+        <td class="mono" style="font-weight:700;color:var(--green)">₹${fmt(r.net)}</td>
+        <td><input class="remark-inp" type="text" placeholder="add note…" value="${remark.replace(/"/g,'&quot;')}" onchange="setPayrollRemark('${mo}',${e.id},this.value)" oninput="setPayrollRemark('${mo}',${e.id},this.value)"></td>
       </tr>`;
     }).join('');
-    const body=document.getElementById('pay-tbody'); if(body) body.innerHTML=rows || '<tr><td colspan="14" style="text-align:center;padding:20px;color:var(--muted)">No payroll data</td></tr>';
+    const body=document.getElementById('pay-tbody');
+    if(body) body.innerHTML=rows||'<tr><td colspan="15" style="text-align:center;padding:20px;color:var(--muted)">No payroll data</td></tr>';
     const foot=document.getElementById('pay-tfoot');
-    if(foot) foot.innerHTML=`<td colspan="3">Total</td><td>${T.daysP}</td><td>${Math.round(T.oth*100)/100}</td><td>${money(T.sal)}</td><td>${T.ota<0?'-':''}${money(Math.abs(T.ota))}</td><td>${money(T.food || foodMonth)}</td><td>${money(T.maxAdvance)}</td><td>${money(T.adv)}</td><td>${T.old<0?'-':''}${money(Math.abs(T.old))}</td><td>${money(T.extra)}</td><td style="font-size:13px">${money(T.net)}</td><td style="font-size:13px">${money(T.total)}</td>`;
+    if(foot) foot.innerHTML=`<td></td><td colspan="5">TOTAL (${rowsData.length} employees)</td><td></td><td></td><td class="mono">₹${fmt(T.sal)}</td><td class="mono ca">${T.ota<0?'-₹'+fmt(Math.abs(T.ota)):'₹'+fmt(T.ota)}</td><td class="mono">₹${fmt(T.adv)}</td><td class="mono">${T.old<0?'-₹'+fmt(Math.abs(T.old)):'₹'+fmt(T.old)}</td><td class="mono cg">₹${fmt(T.extra)}</td><td class="mono" style="font-size:13px;color:var(--green)">₹${fmt(T.net)}</td><td></td>`;
     const stats=document.getElementById('pay-stats');
     if(stats) stats.innerHTML=`
-      <div class="stat-card"><div class="stat-label">Net Payroll</div><div class="stat-val" style="font-size:17px">${money(T.net)}</div></div>
-      <div class="stat-card"><div class="stat-label">Advance Total</div><div class="stat-val sv-a" style="font-size:17px">${money(T.adv)}</div></div>
-      <div class="stat-card"><div class="stat-label">Old Balance + Allowance</div><div class="stat-val sv-g" style="font-size:17px">${money(T.old+T.extra)}</div></div>
-      <div class="stat-card"><div class="stat-label">Total Cost incl. Food</div><div class="stat-val sv-b" style="font-size:17px">${money(T.total)}</div></div>`;
+      <div class="stat-card"><div class="stat-label">Net Payroll</div><div class="stat-val" style="font-size:17px">₹${fmt(T.net)}</div></div>
+      <div class="stat-card"><div class="stat-label">Advance Total</div><div class="stat-val sv-a" style="font-size:17px">₹${fmt(T.adv)}</div></div>
+      <div class="stat-card"><div class="stat-label">Old Balance + Allowance</div><div class="stat-val sv-g" style="font-size:17px">₹${fmt(T.old+T.extra)}</div></div>
+      <div class="stat-card"><div class="stat-label">Salary Amount</div><div class="stat-val sv-b" style="font-size:17px">₹${fmt(T.sal)}</div></div>`;
+    if(typeof payrollUpdateSelBadge==='function') payrollUpdateSelBadge();
     renderDepartmentMonthlyPayout(mo);
   };
 
@@ -4085,7 +4138,6 @@ boot();
 ══════════════════════════════════════════════════════════════ */
 (function(){
   function safeMoney(n){ return (typeof money==='function') ? money(n) : ('₹'+(Math.round(Number(n)||0)).toLocaleString('en-IN')); }
-  function esc(s){ return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
   function monthDate(mo, day){
     return mo + '-' + String(day).padStart(2,'0');
   }
@@ -4129,11 +4181,6 @@ boot();
       search.addEventListener('keyup', window.outstationSearchChanged);
     }
     renderOutstationBulk();
-    // If EMPS hasn't loaded from cloud yet, retry once data is available
-    if(!Array.isArray(EMPS) || !EMPS.length){
-      setTimeout(()=>{ try{ renderOutstationBulk(); }catch(_){} }, 1500);
-      setTimeout(()=>{ try{ renderOutstationBulk(); }catch(_){} }, 3500);
-    }
   };
   function injectOutstationStyle(){
     if(document.getElementById('outstation-style')) return;
@@ -4205,8 +4252,7 @@ boot();
       updateOutstationTotals();
     }catch(err){
       const tbody=document.getElementById('out-tbody');
-      const msg=String(err && err.message ? err.message : err).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
-      if(tbody) tbody.innerHTML=`<tr><td colspan="9" style="text-align:center;padding:24px;color:#b91c1c">Outstation list error: ${msg}</td></tr>`;
+      if(tbody) tbody.innerHTML=`<tr><td colspan="9" style="text-align:center;padding:24px;color:#b91c1c">Outstation list error: ${esc(err && err.message ? err.message : String(err))}</td></tr>`;
       console.error('Outstation render error', err);
     }
   };
