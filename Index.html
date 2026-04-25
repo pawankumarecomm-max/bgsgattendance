@@ -197,6 +197,7 @@ label{font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:var(--mu
   <div class="s-sec">
     <div class="s-lbl">Tools</div>
     <button class="nav" onclick="goTo('sheetimport',this)">📋 &nbsp;Daily Sheet Import</button>
+    <button class="nav" onclick="goTo('outstation',this)">🛣 &nbsp;Outstation Bulk</button>
     <button class="nav" onclick="goTo('import',this)">📥 &nbsp;Import Excel</button>
     <button class="nav" onclick="goTo('reports',this)">📊 &nbsp;Reports</button>
   </div>
@@ -448,6 +449,52 @@ label{font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:var(--mu
           <thead><tr><th>#</th><th>Name</th><th>Shift</th><th>Days Present</th><th>OT Hours</th><th>Rate/Hr (₹)</th><th>OT Amount (₹)</th></tr></thead>
           <tbody id="ot-tbody"></tbody>
           <tfoot><tr class="tfr" id="ot-tfoot"></tr></tfoot>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- OUTSTATION BULK ATTENDANCE -->
+  <div class="page" id="pg-outstation">
+    <div class="card">
+      <div class="card-hdr">
+        <h3>Outstation Bulk Attendance <span style="font-weight:400;color:var(--muted);font-size:11px">(month-wise present day count + total OT for outside-station employees)</span></h3>
+        <div class="cha">
+          <label style="margin:0;font-size:11px;text-transform:none;letter-spacing:0;color:var(--muted)">Month</label>
+          <input type="month" id="out-month" style="width:140px" onchange="renderOutstationBulk()">
+          <input id="out-search" placeholder="Search employee name / department / role" style="width:260px" oninput="outstationSearchChanged()" onkeyup="outstationSearchChanged()">
+          <button class="btn btn-sm" onclick="outstationSelectVisible(true)">✓ Select Visible</button>
+          <button class="btn btn-sm" onclick="outstationSelectVisible(false)">Clear</button>
+          <button class="btn btn-p btn-sm" onclick="saveOutstationBulkAttendance()">💾 Save Bulk Attendance</button>
+        </div>
+      </div>
+      <div style="padding:12px 18px;background:#fffbeb;border-bottom:1px solid #fde68a;font-size:12px;color:#92400e">
+        Use this only for outstation employees where you have monthly <strong>Present Days</strong> and <strong>Total OT Hours</strong>. 
+        When saved, selected employees will be marked Present for the entered day count and Absent for the remaining days of that month, so payroll matches exactly.
+      </div>
+      <div class="sbar">
+        <span><span class="sdot" style="background:var(--green)"></span><span id="out-sel-count">0 Selected</span></span>
+        <span><span class="sdot" style="background:#d97706"></span><span id="out-day-total">0 Days</span></span>
+        <span><span class="sdot" style="background:var(--blue)"></span><span id="out-ot-total">0 OT Hrs</span></span>
+      </div>
+      <div class="scrollable" style="max-height:calc(100vh - 270px)">
+        <table class="tbl outstation-table">
+          <thead>
+            <tr>
+              <th style="width:42px">Use</th>
+              <th>#</th>
+              <th style="min-width:190px">Employee</th>
+              <th>Department</th>
+              <th>Shift</th>
+              <th>Current Days</th>
+              <th>Current OT</th>
+              <th style="width:120px">Present Days</th>
+              <th style="width:120px">Total OT Hrs</th>
+            </tr>
+          </thead>
+          <tbody id="out-tbody">
+            <tr><td colspan="9" style="text-align:center;padding:24px;color:var(--muted)">Loading employees…</td></tr>
+          </tbody>
         </table>
       </div>
     </div>
@@ -1003,11 +1050,13 @@ async function boot(silent=false) {
     }
     parseAll(data);
     updateCounts(); renderDashboard(); renderEmpTable(); renderAtt(); renderPayroll(); renderOT(); renderReports();
+    if(typeof renderOutstationBulk==='function') try{ renderOutstationBulk(); }catch(_){}
     setPill('ok','Synced ✓');
     if(!silent) toast('✓ Loaded fresh cloud data','ok');
   } catch(e) {
     parseAll({employees: [], attendance: [], advances: [], snacks:{morning:10,snacks:20,evening:80}});
     updateCounts(); renderDashboard(); renderEmpTable(); renderAtt(); renderPayroll(); renderOT(); renderReports();
+    if(typeof renderOutstationBulk==='function') try{ renderOutstationBulk(); }catch(_){}
     setPill('err','Cloud sync failed');
     if(!silent) toast('Cloud sync failed: '+e.message,'err');
   }
@@ -1176,6 +1225,7 @@ function goTo(id,btn){
       if(dm) dm.value=mo;
       if(typeof renderDepartmentMonthlyPayout==='function') renderDepartmentMonthlyPayout(mo);
     },snacks:renderSnacks,overtime:renderOT,reports:renderReports,
+    outstation:function(){ if(typeof initOutstationBulk==='function') initOutstationBulk(); },
     sheetimport:initSheetImport}[id]||function(){})();
 }
 
@@ -4027,6 +4077,232 @@ boot();
   };
   setTimeout(()=>{ try{ window.renderDepartmentMonthlyPayout(); }catch(e){ console.warn('Compact dept payout render skipped:', e.message); } }, 900);
 })();
+
+/* ══════════════════════════════════════════════════════════════
+   OUTSTATION BULK ATTENDANCE
+   - Enter monthly present day count + total OT for outstation employees
+   - Saves into existing attendance table, so payroll works without new SQL
+══════════════════════════════════════════════════════════════ */
+(function(){
+  function safeMoney(n){ return (typeof money==='function') ? money(n) : ('₹'+(Math.round(Number(n)||0)).toLocaleString('en-IN')); }
+  function esc(s){ return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+  function monthDate(mo, day){
+    return mo + '-' + String(day).padStart(2,'0');
+  }
+  function outstationMonth(){
+    const el=document.getElementById('out-month');
+    const pm=document.getElementById('pay-month');
+    const mo=(el && el.value) || (pm && pm.value) || new Date().toISOString().slice(0,7);
+    if(el && !el.value) el.value=mo;
+    return mo;
+  }
+  function currentMonthlyAttendance(eid, mo){
+    let days=0, ot=0;
+    if(typeof daInMo==='function'){
+      daInMo(mo).forEach(([,map])=>{
+        const r=map && map[eid];
+        if(r && r.status==='P') days++;
+        if(r && r.status!=='H') ot += Number(r.ot||0);
+      });
+    }
+    return {days, ot:Math.round(ot*100)/100};
+  }
+  function outstationNorm(v){
+    return String(v||'')
+      .toLowerCase()
+      .replace(/[()\-_.]/g,' ')
+      .replace(/\s+/g,' ')
+      .trim();
+  }
+  window.outstationSearchChanged = function(){
+    if(typeof renderOutstationBulk==='function') renderOutstationBulk();
+  };
+  window.initOutstationBulk = function(){
+    const el=document.getElementById('out-month');
+    const pm=document.getElementById('pay-month');
+    if(el && !el.value) el.value=(pm && pm.value) || new Date().toISOString().slice(0,7);
+    injectOutstationStyle();
+    const search=document.getElementById('out-search');
+    if(search && !search.dataset.bound){
+      search.dataset.bound='1';
+      search.addEventListener('input', window.outstationSearchChanged);
+      search.addEventListener('keyup', window.outstationSearchChanged);
+    }
+    renderOutstationBulk();
+    // If EMPS hasn't loaded from cloud yet, retry once data is available
+    if(!Array.isArray(EMPS) || !EMPS.length){
+      setTimeout(()=>{ try{ renderOutstationBulk(); }catch(_){} }, 1500);
+      setTimeout(()=>{ try{ renderOutstationBulk(); }catch(_){} }, 3500);
+    }
+  };
+  function injectOutstationStyle(){
+    if(document.getElementById('outstation-style')) return;
+    const st=document.createElement('style');
+    st.id='outstation-style';
+    st.textContent=`
+      #pg-outstation .outstation-table thead th{position:sticky;top:0;z-index:5;background:#e5e7eb!important;color:#374151!important;font-weight:800;border-bottom:1px solid #cbd5e1;text-transform:uppercase;letter-spacing:.55px;}
+      #pg-outstation .out-inp{width:92px;padding:5px 8px;font-size:12px;border-radius:7px;}
+      #pg-outstation .out-check{width:16px;height:16px;accent-color:#f97316;}
+      #pg-outstation .out-name{font-weight:600;font-size:12px;}
+      #pg-outstation .out-sub{display:block;color:var(--muted);font-size:10px;margin-top:2px;}
+      #pg-outstation tr.out-selected td{background:#fff7ed!important;}
+    `;
+    document.head.appendChild(st);
+  }
+  window.renderOutstationBulk = function(){
+    try{
+      injectOutstationStyle();
+      const tbody=document.getElementById('out-tbody'); if(!tbody) return;
+      const mo=outstationMonth();
+      const q=outstationNorm(document.getElementById('out-search')?.value||'');
+
+      // Use live employee list first; if it is still empty during startup, use the built-in master
+      // so the table never remains stuck at "Loading employees…".
+      const employeeSource = (Array.isArray(EMPS) && EMPS.length)
+        ? EMPS
+        : (Array.isArray(CURRENT_EMPLOYEE_MASTER) ? CURRENT_EMPLOYEE_MASTER : []);
+
+      const rows=employeeSource
+        .filter(e=>String(e.status||'ACTIVE').toUpperCase()!=='INACTIVE')
+        .filter(e=>{
+          if(!q) return true;
+          const hay = outstationNorm([
+            e.name,
+            e.department,
+            e.dept,
+            e.position,
+            e.pos,
+            e.unit,
+            e.unit_name,
+            e.id
+          ].join(' '));
+          return hay.includes(q);
+        });
+
+      if(!rows.length){
+        const rawQ=String(document.getElementById('out-search')?.value||'').trim();
+        tbody.innerHTML=`<tr><td colspan="9" style="text-align:center;padding:24px;color:var(--muted)">No employee found${rawQ ? ' for: '+esc(rawQ) : ''}</td></tr>`;
+        updateOutstationTotals();
+        return;
+      }
+
+      tbody.innerHTML=rows.map((e,i)=>{
+        const cur=currentMonthlyAttendance(e.id, mo);
+        const dept=String(e.department||e.dept||'').trim() || '—';
+        const pos=String(e.position||e.pos||'Employee').trim();
+        return `<tr id="out-row-${e.id}">
+          <td><input class="out-check" type="checkbox" data-eid="${e.id}" onchange="updateOutstationTotals()"></td>
+          <td class="cm">${i+1}</td>
+          <td><span class="out-name">${esc(e.name||'')}</span><span class="out-sub">${esc(pos)}</span></td>
+          <td>${esc(dept)}</td>
+          <td><span class="badge b${e.shift}">${e.shift||8}h</span></td>
+          <td class="mono">${cur.days}</td>
+          <td class="mono">${cur.ot}</td>
+          <td><input class="out-inp out-days" data-eid="${e.id}" type="number" min="0" max="${daysInMonth(mo)}" step="1" value="${cur.days||0}" oninput="updateOutstationTotals()"></td>
+          <td><input class="out-inp out-ot" data-eid="${e.id}" type="number" step="0.25" value="${cur.ot||0}" oninput="updateOutstationTotals()"></td>
+        </tr>`;
+      }).join('');
+      updateOutstationTotals();
+    }catch(err){
+      const tbody=document.getElementById('out-tbody');
+      const msg=String(err && err.message ? err.message : err).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+      if(tbody) tbody.innerHTML=`<tr><td colspan="9" style="text-align:center;padding:24px;color:#b91c1c">Outstation list error: ${msg}</td></tr>`;
+      console.error('Outstation render error', err);
+    }
+  };
+  window.outstationSelectVisible = function(checked){
+    document.querySelectorAll('#out-tbody .out-check').forEach(cb=>{
+      cb.checked=!!checked;
+      const tr=cb.closest('tr'); if(tr) tr.classList.toggle('out-selected', !!checked);
+    });
+    updateOutstationTotals();
+  };
+  window.updateOutstationTotals = function(){
+    let selected=0, days=0, ot=0;
+    document.querySelectorAll('#out-tbody .out-check').forEach(cb=>{
+      const tr=cb.closest('tr');
+      if(tr) tr.classList.toggle('out-selected', cb.checked);
+      if(!cb.checked) return;
+      selected++;
+      const eid=cb.dataset.eid;
+      days += Number(document.querySelector(`#out-tbody .out-days[data-eid="${eid}"]`)?.value||0);
+      ot += Number(document.querySelector(`#out-tbody .out-ot[data-eid="${eid}"]`)?.value||0);
+    });
+    const s=document.getElementById('out-sel-count'); if(s) s.textContent=selected+' Selected';
+    const d=document.getElementById('out-day-total'); if(d) d.textContent=days+' Days';
+    const o=document.getElementById('out-ot-total'); if(o) o.textContent=Math.round(ot*100)/100+' OT Hrs';
+  };
+  window.saveOutstationBulkAttendance = async function(){
+    const mo=outstationMonth();
+    const dim=daysInMonth(mo);
+    const selected=[...document.querySelectorAll('#out-tbody .out-check')].filter(cb=>cb.checked);
+    if(!selected.length){ toast('Select at least one outstation employee','err'); return; }
+    const rows=[];
+    selected.forEach(cb=>{
+      const eid=Number(cb.dataset.eid);
+      const emp=(Array.isArray(EMPS)?EMPS:[]).find(e=>Number(e.id)===eid);
+      if(!emp) return;
+      let presentDays=Math.floor(Number(document.querySelector(`#out-tbody .out-days[data-eid="${eid}"]`)?.value||0));
+      presentDays=Math.max(0, Math.min(dim, presentDays));
+      const totalOt=Number(document.querySelector(`#out-tbody .out-ot[data-eid="${eid}"]`)?.value||0);
+      const otBase=presentDays>0 ? Math.floor((totalOt/presentDays)*100)/100 : 0;
+      let remainingOt=Math.round(totalOt*100)/100;
+      for(let day=1; day<=dim; day++){
+        const date=monthDate(mo, day);
+        if(!ATTS[date]) ATTS[date]={};
+        const isP=day<=presentDays;
+        let ot=0;
+        if(isP){
+          ot = day===presentDays ? Math.round(remainingOt*100)/100 : otBase;
+          remainingOt = Math.round((remainingOt - ot)*100)/100;
+        }
+        const shift=Number(emp.shift||8);
+        const hrs=isP ? Math.max(0, shift + ot) : 0;
+        const auto=isP && typeof computeTimeRange==='function'
+          ? computeTimeRange(hrs, (typeof defaultInTime==='function'?defaultInTime(shift):'09:00'))
+          : {in:'',out:'',hrs:hrs};
+        const rec={
+          status:isP?'P':'A',
+          in_time:isP?auto.in:'',
+          out_time:isP?auto.out:'',
+          hrs:isP?round2(auto.hrs||hrs):0,
+          ot:isP?round2(ot):0
+        };
+        ATTS[date][eid]=rec;
+        rows.push({
+          employee_id:eid,
+          employee_name:emp.name,
+          date,
+          status:rec.status,
+          in_time:rec.in_time,
+          out_time:rec.out_time,
+          total_hours:rec.hrs,
+          ot_hours:rec.ot,
+          unit_name:emp.unit || (window.LIVE_STATE && LIVE_STATE.currentUser && LIVE_STATE.currentUser.unit) || undefined
+        });
+      }
+    });
+    setPill('busy','Saving outstation attendance…');
+    saveLocalCache({reason:'outstation-bulk-attendance', backupCurrent:true, backupReason:'before-outstation-bulk'});
+    try{
+      await gasGet({action:'saveAttendance', rows});
+      setPill('ok','Synced ✓');
+      toast('✓ Outstation bulk attendance saved to cloud','ok');
+      renderOutstationBulk();
+      if(typeof renderPayroll==='function') renderPayroll();
+      if(typeof renderDepartmentMonthlyPayout==='function') renderDepartmentMonthlyPayout(mo);
+      if(typeof renderDashboard==='function') renderDashboard();
+    }catch(e){
+      setPill('err','Cloud save failed');
+      toast('Outstation attendance was not saved to cloud: '+(e && e.message ? e.message : e),'err');
+    }
+  };
+  // Auto-refresh when the tab is open, including after cloud sync finishes.
+  setTimeout(()=>{ try{ if(document.getElementById('pg-outstation')?.classList.contains('active')) initOutstationBulk(); }catch(e){} }, 300);
+  setTimeout(()=>{ try{ if(document.getElementById('pg-outstation')?.classList.contains('active')) renderOutstationBulk(); }catch(e){} }, 1200);
+  if(typeof TITLES==='object') TITLES.outstation='Outstation Bulk';
+})();
+
 </script>
 
 </body>
