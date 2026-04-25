@@ -100,7 +100,11 @@ label{font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:var(--mu
 .prog-wrap{height:5px;background:#e5e7eb;border-radius:3px;overflow:hidden;margin-top:4px}
 .prog{height:100%;border-radius:3px}
 .scrollable{overflow-x:auto}
-.adv-inp{width:72px;font-size:11px;padding:3px 6px;border-radius:5px}
+.adv-inp{width:82px;font-size:11px;padding:3px 6px;border-radius:5px}
+.pay-adj-inp{width:92px;font-size:11px;padding:3px 6px;border-radius:5px}
+.bank-inp{width:140px;font-size:11px;padding:3px 6px;border-radius:5px;font-family:'DM Mono',monospace}
+.ifsc-inp{width:105px;font-size:11px;padding:3px 6px;border-radius:5px;font-family:'DM Mono',monospace;text-transform:uppercase}
+.bank-missing{background:#fff7ed;border-color:#fdba74}
 /* Late / Early styles */
 .late-tag{display:inline-flex;align-items:center;gap:3px;padding:1px 7px;border-radius:20px;font-size:10px;font-weight:600;background:#fff3cd;color:#856404;border:1px solid #ffc107}
 .early-tag{display:inline-flex;align-items:center;gap:3px;padding:1px 7px;border-radius:20px;font-size:10px;font-weight:600;background:#f8d7da;color:#842029;border:1px solid #f5c2c7}
@@ -156,6 +160,12 @@ label{font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:var(--mu
 .dept-list-note{font-size:11px;color:var(--muted)}
 @media (max-width:1200px){.dept-mini-stats{grid-template-columns:repeat(2,minmax(0,1fr));}}
 
+/* Separate Department Payout tab + freeze table headers */
+#pg-payroll .scrollable,#pg-deptpayroll .scrollable{max-height:calc(100vh - 250px);overflow:auto;}
+#pg-payroll table.tbl thead th,#pg-deptpayroll table.tbl thead th{position:sticky;top:0;z-index:6;background:#f9fafb;box-shadow:0 1px 0 var(--border);}
+#pg-deptpayroll #dept-month-payout-card{margin-bottom:14px;}
+#pg-deptpayroll .card-hdr{position:sticky;top:0;background:#fff;z-index:8;}
+
 </style>
 </head>
 <body>
@@ -177,6 +187,7 @@ label{font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:var(--mu
     <button class="nav" onclick="goTo('employees',this)">👷 &nbsp;Employees</button>
     <button class="nav" onclick="goTo('attendance',this)">📅 &nbsp;Attendance</button>
     <button class="nav" onclick="goTo('payroll',this)">💰 &nbsp;Monthly Payroll</button>
+    <button class="nav" onclick="goTo('deptpayroll',this)">🏷 &nbsp;Dept Wise Payout</button>
   </div>
   <div class="s-sec">
     <div class="s-lbl">Expenses</div>
@@ -266,6 +277,12 @@ label{font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:var(--mu
           <div><label>Monthly Salary (₹)</label><input id="es" type="number" placeholder="20000"></div>
           <div><label>Shift</label><select id="esh"><option value="8">8 Hour Shift</option><option value="12">12 Hour Shift</option><option value="5">5 Hour Shift</option></select></div>
         </div>
+        <div class="fg4" style="grid-template-columns:1.2fr 1fr 2fr 1fr;margin-bottom:10px">
+          <div><label>Bank Account No.</label><input id="eba" placeholder="Optional bank A/C"></div>
+          <div><label>IFSC Code</label><input id="eifsc" placeholder="Optional IFSC" oninput="this.value=this.value.toUpperCase()"></div>
+          <div style="display:flex;align-items:end;font-size:11px;color:var(--muted);padding-bottom:7px">Bank details save in Employee Master and auto-fetch in Advance Excel export.</div>
+          <div></div>
+        </div>
         <div style="display:flex;gap:8px">
           <button class="btn btn-p btn-sm" onclick="addEmployee()">💾 Save to Sheet</button>
           <button class="btn btn-sm" onclick="document.getElementById('add-form').classList.remove('open')">Cancel</button>
@@ -273,7 +290,7 @@ label{font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:var(--mu
       </div>
       <div class="scrollable">
         <table class="tbl">
-          <thead><tr><th>#</th><th>Name</th><th>Department</th><th>Position</th><th>Salary/Month</th><th>Shift</th><th>Daily Rate</th><th>Action</th></tr></thead>
+          <thead><tr><th>#</th><th>Name</th><th>Department</th><th>Position</th><th>Salary/Month</th><th>Shift</th><th>Daily Rate</th><th>Bank A/C</th><th>IFSC</th><th>Action</th></tr></thead>
           <tbody id="emp-tbody"><tr><td colspan="7" style="text-align:center;padding:24px;color:var(--muted)">Loading…</td></tr></tbody>
         </table>
       </div>
@@ -322,13 +339,48 @@ label{font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:var(--mu
           <input type="month" id="pay-month" style="width:140px" onchange="renderPayroll()">
           <label style="margin:0;font-size:11px;text-transform:none;letter-spacing:0;color:var(--muted)">Days</label>
           <input type="number" id="pay-days" value="31" style="width:55px" readonly title="Auto based on selected month">
+          <button class="btn btn-sm" onclick="fillBlankAdvances50()" title="Fill only blank advance cells with 50% of salary">⚡ Fill Blank 50%</button>
+          <button class="btn btn-p btn-sm" onclick="exportAdvanceExcel()">⬇ Export Advance Excel</button>
         </div>
       </div>
       <div class="scrollable">
         <table class="tbl">
-          <thead><tr><th>#</th><th style="min-width:130px">Name</th><th>Shift</th><th>Days</th><th>OT Hrs</th><th>Salary (₹)</th><th>OT Amt (₹)</th><th>Food (Co.)</th><th>Advance (₹)</th><th>Net Pay (₹)</th><th>Total Cost (₹)</th></tr></thead>
+          <thead><tr><th>#</th><th style="min-width:130px">Name</th><th>Shift</th><th>Days</th><th>OT Hrs</th><th>Salary (₹)</th><th>OT Amt (₹)</th><th>Food (Co.)</th><th>Max Advance</th><th>Advance (₹)</th><th>Old Balance / Adj. (₹)</th><th>Extra Allowance (₹)</th><th>Net Pay (₹)</th><th>Total Cost (₹)</th></tr></thead>
           <tbody id="pay-tbody"></tbody>
-          <tfoot><tr class="tfr" id="pay-tfoot"><td colspan="11" style="text-align:center;color:var(--muted);padding:10px">Select month above</td></tr></tfoot>
+          <tfoot><tr class="tfr" id="pay-tfoot"><td colspan="14" style="text-align:center;color:var(--muted);padding:10px">Select month above</td></tr></tfoot>
+        </table>
+      </div>
+    </div>
+
+
+  </div>
+
+  <!-- DEPARTMENT PAYOUT -->
+  <div class="page" id="pg-deptpayroll">
+    <div class="card" id="dept-month-payout-card">
+      <div class="card-hdr">
+        <h3>Department-wise Monthly Payout <span style="font-weight:400;color:var(--muted);font-size:11px">(Salary + OT + old balance + allowance - advance + department rent)</span></h3>
+        <div class="cha">
+          <label style="margin:0;font-size:11px;text-transform:none;letter-spacing:0;color:var(--muted)">Month</label>
+          <input type="month" id="dept-pay-month" style="width:140px" onchange="syncDeptPayrollMonth(this.value);renderDepartmentMonthlyPayout(this.value)">
+          <label style="margin:0;font-size:11px;text-transform:none;letter-spacing:0;color:var(--muted)">View</label>
+          <select id="dept-filter" style="width:180px" onchange="renderDepartmentMonthlyPayout(document.getElementById('dept-pay-month').value)">
+            <option value="ALL">All Departments</option>
+          </select>
+          <label style="margin:0;font-size:11px;text-transform:none;letter-spacing:0;color:var(--muted)">Rent Department</label>
+          <select id="dept-rent-dept" style="width:160px"></select>
+          <label style="margin:0;font-size:11px;text-transform:none;letter-spacing:0;color:var(--muted)">Rent ₹</label>
+          <input type="number" id="dept-rent-amount" min="0" value="0" style="width:110px">
+          <button class="btn btn-sm" onclick="saveDepartmentRentFromUI()">💾 Save Rent</button>
+          <button class="btn btn-p btn-sm" onclick="exportDepartmentPayoutExcel()">⬇ Export Dept Payout</button>
+        </div>
+      </div>
+      <div id="dept-payout-summary" class="dept-mini-stats" style="padding:14px 18px 4px"></div>
+      <div class="scrollable" style="padding:0 18px 18px">
+        <table class="tbl payroll-dept-table">
+          <thead><tr><th>Department</th><th>Employees</th><th>Present Days</th><th>OT Hrs</th><th>Salary ₹</th><th>OT ₹</th><th>Old Bal./Adj. ₹</th><th>Allowance ₹</th><th>Advance ₹</th><th>Net Salary Payout ₹</th><th>Food Share ₹</th><th>Rent ₹</th><th>Total Dept Cost ₹</th></tr></thead>
+          <tbody id="dept-payout-body"></tbody>
+          <tfoot><tr class="tfr" id="dept-payout-foot"><td colspan="13" style="text-align:center;color:var(--muted);padding:10px">Select month above</td></tr></tfoot>
         </table>
       </div>
     </div>
@@ -645,7 +697,7 @@ async function sb(q, label){
   return data;
 }
 function empRow(r){
-  return {
+  const row = {
     id: num(r.id),
     name: String(r.name || '').trim(),
     department: String(r.department || '').trim(),
@@ -654,6 +706,13 @@ function empRow(r){
     shift: num(r.shift, 8),
     status: String(r.status || 'ACTIVE').trim() || 'ACTIVE'
   };
+  if(Object.prototype.hasOwnProperty.call(r,'bank_account_no') || Object.prototype.hasOwnProperty.call(r,'bankAccount') || Object.prototype.hasOwnProperty.call(r,'bank_account')){
+    row.bank_account_no = String(r.bank_account_no ?? r.bankAccount ?? r.bank_account ?? '').trim();
+  }
+  if(Object.prototype.hasOwnProperty.call(r,'ifsc_code') || Object.prototype.hasOwnProperty.call(r,'ifsc')){
+    row.ifsc_code = String(r.ifsc_code ?? r.ifsc ?? '').trim().toUpperCase();
+  }
+  return row;
 }
 function attRow(r){
   return cleanRow({
@@ -674,7 +733,9 @@ function advRow(r){
     employee_id: num(r.employee_id),
     employee_name: String(r.employee_name || '').trim(),
     month: String(r.month || '').trim(),
-    amount: num(r.amount)
+    amount: num(r.amount),
+    old_balance: num(r.old_balance),
+    extra_allowance: num(r.extra_allowance)
   });
 }
 function snackRow(r){
@@ -729,6 +790,16 @@ async function gasGet(params) {
       await sb(
         getSupabase().from(TABLES.EMP).update({ status:'INACTIVE' }).eq('id', num(params.id)),
         'Delete employee'
+      );
+      return { ok:true };
+
+    case 'updateEmployeeBank':
+      await sb(
+        getSupabase().from(TABLES.EMP).update({
+          bank_account_no: String(params.bank_account_no || '').trim(),
+          ifsc_code: String(params.ifsc_code || '').trim().toUpperCase()
+        }).eq('id', num(params.id)),
+        'Save bank details'
       );
       return { ok:true };
 
@@ -816,7 +887,7 @@ clearCloudOnlyCache();
 
 function buildCacheSnapshot(){
   return {
-    employees: EMPS.map(e=>({id:e.id,name:e.name,department:e.dept,position:e.pos,salary:e.salary,shift:e.shift,status:'ACTIVE'})),
+    employees: EMPS.map(e=>({id:e.id,name:e.name,department:e.dept,position:e.pos,salary:e.salary,shift:e.shift,status:'ACTIVE',bank_account_no:e.bank_account_no||'',ifsc_code:e.ifsc_code||''})),
     attendance: Object.entries(ATTS).flatMap(([date,dayA])=>
       Object.entries(dayA).map(([eid,r])=>({employee_id:+eid,date,...r,ot_hours:r.ot,total_hours:r.hrs}))),
     advances: Object.entries(ADVS).flatMap(([mo,mo_])=>
@@ -949,7 +1020,7 @@ function parseAll(data) {
   EMPS = (data.employees||[])
     .filter(r=>String(r.status||'ACTIVE').toUpperCase()!=='INACTIVE' && r.name)
     .map(r=>({id:+r.id, name:String(r.name).trim(), dept:String(r.department||'').trim(), pos:String(r.position||'').trim(),
-              salary:+r.salary||0, shift:+r.shift||8}));
+              salary:+r.salary||0, shift:+r.shift||8, bank_account_no:String(r.bank_account_no||'').trim(), ifsc_code:String(r.ifsc_code||'').trim().toUpperCase()}));
 
   // Attendance — index by date → empId
   ATTS = {};
@@ -968,7 +1039,11 @@ function parseAll(data) {
   (data.advances||[]).forEach(r=>{
     const mo=String(r.month||'').trim(); if(!mo) return;
     if(!ADVS[mo]) ADVS[mo]={};
-    ADVS[mo][+r.employee_id]=+r.amount||0;
+    ADVS[mo][+r.employee_id]={
+      amount:+r.amount||0,
+      old_balance:+r.old_balance||0,
+      extra_allowance:+r.extra_allowance||0
+    };
   });
 
   // Food rates
@@ -1085,7 +1160,7 @@ async function saveMealEntry(){
    NAVIGATION
 ══════════════════════════════════════════════════════════════ */
 const TITLES={dashboard:'Dashboard',employees:'Employees',attendance:'Attendance',
-  payroll:'Monthly Payroll',snacks:'Tea / Snacks / Dinner',overtime:'OT Summary',import:'Import Excel',sheetimport:'Daily Sheet Import',reports:'Reports'};
+  payroll:'Monthly Payroll',deptpayroll:'Department-wise Payout',snacks:'Tea / Snacks / Dinner',overtime:'OT Summary',import:'Import Excel',sheetimport:'Daily Sheet Import',reports:'Reports'};
 function goTo(id,btn){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.nav').forEach(n=>n.classList.remove('active'));
@@ -1093,7 +1168,14 @@ function goTo(id,btn){
   if(btn) btn.classList.add('active');
   document.getElementById('pg-title').textContent=TITLES[id]||id;
   ({dashboard:renderDashboard,employees:renderEmpTable,attendance:renderAtt,
-    payroll:renderPayroll,snacks:renderSnacks,overtime:renderOT,reports:renderReports,
+    payroll:renderPayroll,deptpayroll:function(){
+      const pm=document.getElementById('pay-month');
+      const dm=document.getElementById('dept-pay-month');
+      const mo=(dm && dm.value) || (pm && pm.value) || new Date().toISOString().slice(0,7);
+      if(pm) pm.value=mo;
+      if(dm) dm.value=mo;
+      if(typeof renderDepartmentMonthlyPayout==='function') renderDepartmentMonthlyPayout(mo);
+    },snacks:renderSnacks,overtime:renderOT,reports:renderReports,
     sheetimport:initSheetImport}[id]||function(){})();
 }
 
@@ -1219,29 +1301,36 @@ function renderDashboardDeptView(forceDept=''){
    EMPLOYEES
 ══════════════════════════════════════════════════════════════ */
 function renderEmpTable(){
-  document.getElementById('emp-tbody').innerHTML=EMPS.map((e,i)=>`<tr>
+  document.getElementById('emp-tbody').innerHTML=EMPS.map((e,i)=>{
+    const acc=String(e.bank_account_no||'');
+    const ifsc=String(e.ifsc_code||'').toUpperCase();
+    return `<tr>
     <td class="cm">${i+1}</td><td style="font-weight:500">${e.name}</td>
     <td><span class="badge b8">${normalizeDepartment(e.dept)}</span></td>
     <td class="cm">${e.pos}</td><td class="mono">₹${fmt(e.salary)}</td>
     <td><span class="badge b${e.shift}">${e.shift}h</span></td>
     <td class="mono cm">₹${fmt(Math.round(salaryPerDay(e.salary, new Date().toISOString().slice(0,7))))}/day</td>
-    <td><button class="btn btn-r btn-sm" onclick="delEmp(${e.id},'${e.name.replace(/'/g,"\\'")}')">Remove</button></td>
-  </tr>`).join('')||'<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--muted)">No employees</td></tr>';
+    <td><input class="bank-inp ${acc?'':'bank-missing'}" id="bank-acc-${e.id}" value="${htmlEsc(acc)}" placeholder="Bank A/C"></td>
+    <td><input class="ifsc-inp ${ifsc?'':'bank-missing'}" id="bank-ifsc-${e.id}" value="${htmlEsc(ifsc)}" placeholder="IFSC" oninput="this.value=this.value.toUpperCase()"></td>
+    <td><button class="btn btn-g btn-sm" onclick="saveEmployeeBank(${e.id})">Save Bank</button> <button class="btn btn-r btn-sm" onclick="delEmp(${e.id},'${e.name.replace(/'/g,"\'")}')">Remove</button></td>
+  </tr>`}).join('')||'<tr><td colspan="10" style="text-align:center;padding:24px;color:var(--muted)">No employees</td></tr>';
 }
 async function addEmployee(){
   const name=document.getElementById('en').value.trim().toUpperCase();
   if(!name){toast('⚠ Enter name','err');return;}
   const dept=document.getElementById('ed').value.trim();
   const sal=+document.getElementById('es').value||0,shift=+document.getElementById('esh').value;
+  const bank_account_no=document.getElementById('eba')?.value.trim()||'';
+  const ifsc_code=(document.getElementById('eifsc')?.value.trim()||'').toUpperCase();
   const id=maxId();
-  EMPS.push({id,name,dept,pos:document.getElementById('ep').value.trim().toUpperCase(),salary:sal,shift});
+  EMPS.push({id,name,dept,pos:document.getElementById('ep').value.trim().toUpperCase(),salary:sal,shift,bank_account_no,ifsc_code});
   saveLocalCache({reason:'employee-add', backupCurrent:true, backupReason:'before-employee-add'});
   updateCounts();renderEmpTable();
   document.getElementById('add-form').classList.remove('open');
-  ['en','ed','ep','es'].forEach(x=>document.getElementById(x).value='');
+  ['en','ed','ep','es','eba','eifsc'].forEach(x=>{const el=document.getElementById(x); if(el) el.value='';});
   setPill('busy','Saving…');
   try{
-    await gasGet({action:'addEmployee',id,name,department:dept,position:EMPS[EMPS.length-1].pos,salary:sal,shift,status:'ACTIVE'});
+    await gasGet({action:'addEmployee',id,name,department:dept,position:EMPS[EMPS.length-1].pos,salary:sal,shift,status:'ACTIVE',bank_account_no,ifsc_code});
     saveLocalCache({reason:'employee-add-cloud-sync'});
     setPill('ok','Synced ✓');toast('✓ '+name+' saved','ok');
   }catch(e){toast('📦 '+name+' saved locally (Supabase offline)','i');}
@@ -1255,6 +1344,96 @@ async function delEmp(id,name){
   setPill('busy','Removing…');
   try{await gasGet({action:'deleteEmployee',id});setPill('ok','Synced ✓');toast('✓ Removed','ok');}
   catch(e){setPill('err','Error');toast('⚠ '+e.message,'err');}
+}
+
+function htmlEsc(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
+function advanceLimit(emp){return Math.round(num(emp?.salary)*0.5);}
+async function saveEmployeeBank(eid){
+  const emp=EMPS.find(e=>e.id===eid); if(!emp) return;
+  const acc=(document.getElementById('bank-acc-'+eid)?.value||'').trim();
+  const ifsc=(document.getElementById('bank-ifsc-'+eid)?.value||'').trim().toUpperCase();
+  emp.bank_account_no=acc; emp.ifsc_code=ifsc;
+  setPill('busy','Saving bank…');
+  try{
+    await gasGet({action:'updateEmployeeBank',id:eid,bank_account_no:acc,ifsc_code:ifsc,unit_name:emp.unit});
+    setPill('ok','Synced ✓'); renderEmpTable(); toast('✓ Bank details saved for '+emp.name,'ok');
+  }catch(e){setPill('err','Cloud save failed'); toast('Add bank_account_no and ifsc_code columns in Supabase, then try again. '+e.message,'err');}
+}
+function normalizeAdvanceRecord(v){
+  if(v && typeof v === 'object'){
+    return {
+      amount: num(v.amount),
+      old_balance: num(v.old_balance),
+      extra_allowance: num(v.extra_allowance)
+    };
+  }
+  return {amount:num(v), old_balance:0, extra_allowance:0};
+}
+function setAdvanceRecord(mo,eid,patch){
+  if(!ADVS[mo]) ADVS[mo]={};
+  const curr=normalizeAdvanceRecord(ADVS[mo][eid]);
+  ADVS[mo][eid]={...curr,...patch};
+  return ADVS[mo][eid];
+}
+function payrollAdvanceRows(mo){
+  return EMPS.map(e=>{
+    let daysP=0,oth=0;
+    daInMo(mo).forEach(([,dayA])=>{ const r=dayA[e.id]; if(r?.status==='P') daysP++; if(r && r.status!=='H') oth+=num(r.ot); });
+    const sal=Math.round(salaryPerDay(e.salary,mo)*daysP);
+    const ota=Math.round(otRatePerHour(e.salary,mo,e.shift)*oth);
+    const payable=sal+ota;
+    const maxAdvance=advanceLimit(e);
+    const advRec=normalizeAdvanceRecord((ADVS[mo]||{})[e.id]);
+    const adv=Math.min(Math.max(num(advRec.amount),0),maxAdvance);
+    const oldBalance=num(advRec.old_balance);
+    const extraAllowance=Math.max(0,num(advRec.extra_allowance));
+    const net=payable + oldBalance + extraAllowance - adv;
+    return {
+      emp:e,daysP,oth:+oth.toFixed(2),sal,ota,payable,maxAdvance,adv,
+      oldBalance,extraAllowance,net,
+      bank:String(e.bank_account_no||''),ifsc:String(e.ifsc_code||'').toUpperCase()
+    };
+  });
+}
+function exportAdvanceExcel(){
+  const mo=document.getElementById('pay-month').value||new Date().toISOString().slice(0,7);
+  const rows=payrollAdvanceRows(mo).map((r,i)=>({
+    'S.No.': i+1,
+    'Employee Name': r.emp.name,
+    'Present Days': r.daysP,
+    'OT Hours': r.oth,
+    'Basic Salary': r.emp.salary,
+    'Payable Salary Current Month': r.payable,
+    'Max Advance Allowed (50%)': r.maxAdvance,
+    'Advance Amount': r.adv,
+    'Old Balance / Adjustment': r.oldBalance,
+    'Extra Allowance': r.extraAllowance,
+    'Net Pay After Advance': r.net,
+    'Bank Account Number': r.bank,
+    'IFSC Code': r.ifsc,
+    'Bank Status': (r.bank && r.ifsc) ? 'OK' : 'MISSING BANK DETAILS'
+  }));
+  if(!window.XLSX){toast('Excel library not loaded. Check internet and refresh.','err');return;}
+  const ws=XLSX.utils.json_to_sheet(rows);
+  ws['!cols']=[{wch:7},{wch:28},{wch:12},{wch:10},{wch:13},{wch:22},{wch:20},{wch:15},{wch:22},{wch:16},{wch:19},{wch:24},{wch:14},{wch:22}];
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,'Advance '+mo);
+  XLSX.writeFile(wb,'Advance_Export_'+mo+'.xlsx');
+}
+async function fillBlankAdvances50(){
+  const mo=document.getElementById('pay-month').value||new Date().toISOString().slice(0,7);
+  const todo=EMPS.filter(e=>!normalizeAdvanceRecord((ADVS[mo]||{})[e.id]).amount);
+  if(!todo.length){toast('All employees already have an advance amount.','i');return;}
+  if(!confirm('Fill blank advance for '+todo.length+' employees with 50% of their salary? Existing custom lump-sum amounts will not change.')) return;
+  setPill('busy','Saving advances…');
+  try{
+    for(const e of todo){
+      const amt=advanceLimit(e);
+      const rec=setAdvanceRecord(mo,e.id,{amount:amt});
+      await gasGet({action:'saveAdvance',employee_id:e.id,employee_name:e.name,month:mo,amount:rec.amount,old_balance:rec.old_balance,extra_allowance:rec.extra_allowance,unit_name:e.unit});
+    }
+    setPill('ok','Synced ✓'); renderPayroll(); toast('✓ Blank advances filled with 50% salary','ok');
+  }catch(e){setPill('err','Cloud save failed'); renderPayroll(); toast('Some advances may not be saved to cloud: '+e.message,'err');}
 }
 
 function getDepartmentCostData(date=todayS()){
@@ -1653,29 +1832,23 @@ function renderPayroll(){
   if(!pmEl.value)pmEl.value=new Date().toISOString().slice(0,7);
   const mo=pmEl.value,dim=daysInMonth(mo),foodMonth=mealTotalForMonth(mo);
   document.getElementById('pay-days').value = dim;
-  const mAdv=ADVS[mo]||{};
-  let tS=0,tO=0,tFood=foodMonth,tA=0,tP=0,tC=0,rows='';
-  EMPS.forEach((e,i)=>{
-    let days=0,otH=0;
-    daInMo(mo).forEach(([,dayA])=>{
-      const r=dayA[e.id];
-      if(!r || r.status==='H') return;
-      if(r.status==='P') days++;
-      otH += num(r.ot);
-    });
-    const perDay = salaryPerDay(e.salary, mo);
-    const otRate = otRatePerHour(e.salary, mo, e.shift);
-    const sal=Math.round(perDay*days),otA=Math.round(otRate*otH);
-    const adv=mAdv[e.id]||0,net=sal+otA-adv,cost=net;
-    tS+=sal;tO+=otA;tA+=adv;tP+=net;tC+=cost;
+  const rowsData=payrollAdvanceRows(mo);
+  let tS=0,tO=0,tFood=foodMonth,tMax=0,tA=0,tOld=0,tExtra=0,tP=0,tC=0,rows='';
+  rowsData.forEach((r,i)=>{
+    const e=r.emp;
+    const cost=r.net;
+    tS+=r.sal;tO+=r.ota;tMax+=r.maxAdvance;tA+=r.adv;tOld+=r.oldBalance;tExtra+=r.extraAllowance;tP+=r.net;tC+=cost;
     rows+=`<tr>
       <td class="cm">${i+1}</td><td style="font-weight:500;font-size:11px">${e.name}</td>
       <td><span class="badge b${e.shift}">${e.shift}h</span></td>
-      <td style="text-align:center"><button class="btn btn-sm" onclick="openEmpAttendanceModal('${mo}',${e.id},'${e.name.replace(/'/g,"\\'")}')">${days}</button></td><td style="text-align:center">${otH>0?'+':''}${otH.toFixed(1)}</td>
-      <td class="mono">₹${fmt(sal)}</td><td class="mono ca">${otA!==0?(otA>0?'₹'+fmt(otA):'-₹'+fmt(Math.abs(otA))):'—'}</td>
+      <td style="text-align:center"><button class="btn btn-sm" onclick="openEmpAttendanceModal('${mo}',${e.id},'${e.name.replace(/'/g,"\'")}')">${r.daysP}</button></td><td style="text-align:center">${r.oth>0?'+':''}${r.oth.toFixed(1)}</td>
+      <td class="mono">₹${fmt(r.sal)}</td><td class="mono ca">${r.ota!==0?(r.ota>0?'₹'+fmt(r.ota):'-₹'+fmt(Math.abs(r.ota))):'—'}</td>
       <td class="mono cg">—</td>
-      <td><input class="adv-inp" type="number" value="${adv}" onchange="setAdv('${mo}',${e.id},'${e.name.replace(/'/g,"\\'")}',this.value)"></td>
-      <td class="mono" style="font-weight:500">₹${fmt(net)}</td>
+      <td class="mono cm">₹${fmt(r.maxAdvance)}</td>
+      <td><input class="adv-inp" type="number" min="0" max="${r.maxAdvance}" value="${r.adv}" onchange="setAdv('${mo}',${e.id},'${e.name.replace(/'/g,"\'")} ',this.value)"></td>
+      <td><input class="pay-adj-inp" type="number" value="${r.oldBalance}" title="Use positive for old pending balance, negative for deduction" onchange="setPayrollAdjustment('${mo}',${e.id},'${e.name.replace(/'/g,"\'")} ','old_balance',this.value)"></td>
+      <td><input class="pay-adj-inp" type="number" min="0" value="${r.extraAllowance}" onchange="setPayrollAdjustment('${mo}',${e.id},'${e.name.replace(/'/g,"\'")} ','extra_allowance',this.value)"></td>
+      <td class="mono" style="font-weight:500">₹${fmt(r.net)}</td>
       <td class="mono cb" style="font-weight:500">₹${fmt(cost)}</td>
     </tr>`;
   });
@@ -1684,20 +1857,49 @@ function renderPayroll(){
   document.getElementById('pay-tfoot').innerHTML=`
     <td colspan="5">TOTAL</td>
     <td class="mono">₹${fmt(tS)}</td><td class="mono ca">${tO!==0?(tO>0?'₹'+fmt(tO):'-₹'+fmt(Math.abs(tO))):'—'}</td>
-    <td class="mono cg">₹${fmt(tFood)}</td><td class="mono">₹${fmt(tA)}</td>
+    <td class="mono cg">₹${fmt(tFood)}</td><td class="mono cm">₹${fmt(tMax)}</td><td class="mono">₹${fmt(tA)}</td>
+    <td class="mono">${tOld<0?'-₹'+fmt(Math.abs(tOld)):'₹'+fmt(tOld)}</td>
+    <td class="mono cg">₹${fmt(tExtra)}</td>
     <td class="mono" style="font-size:13px">₹${fmt(tP)}</td>
     <td class="mono cb" style="font-size:13px">₹${fmt(grandCost)}</td>`;
   document.getElementById('pay-stats').innerHTML=`
     <div class="stat-card"><div class="stat-label">Net Payroll</div><div class="stat-val" style="font-size:17px">₹${fmt(tP)}</div></div>
-    <div class="stat-card"><div class="stat-label">OT Paid / Adj.</div><div class="stat-val sv-a" style="font-size:17px">${tO>=0?'₹'+fmt(tO):'-₹'+fmt(Math.abs(tO))}</div></div>
-    <div class="stat-card"><div class="stat-label">Food / Canteen</div><div class="stat-val sv-g" style="font-size:17px">₹${fmt(tFood)}</div></div>
+    <div class="stat-card"><div class="stat-label">Advance Total</div><div class="stat-val sv-a" style="font-size:17px">₹${fmt(tA)}</div></div>
+    <div class="stat-card"><div class="stat-label">Old Balance + Allowance</div><div class="stat-val sv-g" style="font-size:17px">₹${fmt(tOld+tExtra)}</div></div>
     <div class="stat-card"><div class="stat-label">Total Cost</div><div class="stat-val sv-b" style="font-size:17px">₹${fmt(grandCost)}</div></div>`;
 }
+async function saveAdvanceRecord(mo,eid,name){
+  const rec=normalizeAdvanceRecord((ADVS[mo]||{})[eid]);
+  try{
+    await gasGet({
+      action:'saveAdvance',
+      employee_id:eid,
+      employee_name:name,
+      month:mo,
+      amount:rec.amount,
+      old_balance:rec.old_balance,
+      extra_allowance:rec.extra_allowance,
+      unit_name:(EMPS.find(e=>e.id===eid)||{}).unit
+    });
+  }catch(e){toast('⚠ Payroll adjustment not saved to cloud: '+e.message,'err');}
+}
 async function setAdv(mo,eid,name,val){
-  const amt=+val||0;
-  if(!ADVS[mo])ADVS[mo]={};ADVS[mo][eid]=amt;saveLocalCache({reason:'advance-save', backupCurrent:true, backupReason:'before-advance-save'});renderPayroll();
-  try{await gasGet({action:'saveAdvance',employee_id:eid,employee_name:name,month:mo,amount:amt});}
-  catch(e){toast('⚠ Advance: '+e.message,'err');}
+  const emp=EMPS.find(e=>e.id===eid);
+  const max=advanceLimit(emp);
+  let amt=Math.max(0,+val||0);
+  if(amt>max){ amt=max; toast('Advance capped at 50% salary for '+name,'err'); }
+  setAdvanceRecord(mo,eid,{amount:amt});
+  saveLocalCache({reason:'advance-save', backupCurrent:true, backupReason:'before-advance-save'});
+  renderPayroll();
+  await saveAdvanceRecord(mo,eid,name);
+}
+async function setPayrollAdjustment(mo,eid,name,field,val){
+  const n=+val||0;
+  if(field==='old_balance') setAdvanceRecord(mo,eid,{old_balance:n});
+  if(field==='extra_allowance') setAdvanceRecord(mo,eid,{extra_allowance:Math.max(0,n)});
+  saveLocalCache({reason:'payroll-adjustment-save', backupCurrent:true, backupReason:'before-payroll-adjustment-save'});
+  renderPayroll();
+  await saveAdvanceRecord(mo,eid,name);
 }
 
 
@@ -1924,6 +2126,8 @@ function parseEmpXL(ws){
           position:String(xcv(ws,r,4)||'').trim().toUpperCase(),
           salary:Math.round(sal),
           shift:Math.round(sh),
+          bank_account_no:String(xcv(ws,r,7)||'').trim(),
+          ifsc_code:String(xcv(ws,r,8)||'').trim().toUpperCase(),
           status:'ACTIVE'
         });
       }
@@ -1935,7 +2139,7 @@ function parseEmpXL(ws){
       if(nm&&typeof sal==='number'&&(Number(sh)===8||Number(sh)===12))
         imp.push({id:typeof sr==='number'?Math.round(sr):imp.length+1,
           name:String(nm).trim().toUpperCase(),department:'',position:String(xcv(ws,r,3)||'').trim().toUpperCase(),
-          salary:Math.round(sal),shift:Math.round(sh),status:'ACTIVE'});
+          salary:Math.round(sal),shift:Math.round(sh),bank_account_no:String(xcv(ws,r,6)||'').trim(),ifsc_code:String(xcv(ws,r,7)||'').trim().toUpperCase(),status:'ACTIVE'});
     }
   }
 
@@ -1959,7 +2163,7 @@ async function confirmEmpXL(){
   const data=window._ie;if(!data)return;
   const mergedMap = new Map(EMPS.map(r=>[+r.id,{...r}]));
   data.forEach(r=>{
-    mergedMap.set(+r.id, {id:+r.id,name:r.name,dept:r.department||'',pos:r.position,salary:r.salary,shift:r.shift});
+    { const prev=mergedMap.get(+r.id)||{}; mergedMap.set(+r.id, {id:+r.id,name:r.name,dept:r.department||'',pos:r.position,salary:r.salary,shift:r.shift,bank_account_no:r.bank_account_no ?? prev.bank_account_no ?? '',ifsc_code:r.ifsc_code ?? prev.ifsc_code ?? ''}); }
   });
   EMPS=[...mergedMap.values()].sort((a,b)=>a.id-b.id);
   saveLocalCache({reason:'seed-employee-load', backupCurrent:true, backupReason:'before-seed-employee-load'});
@@ -2729,6 +2933,8 @@ boot();
         pos:String(r.position||'').trim(),
         salary:+r.salary||0,
         shift:+r.shift||8,
+        bank_account_no:String(r.bank_account_no||'').trim(),
+        ifsc_code:String(r.ifsc_code||'').trim().toUpperCase(),
         unit:normalizeUnit(r.unit_name || r.unit)
       }));
 
@@ -2750,7 +2956,11 @@ boot();
     advRows.forEach(r=>{
       const mo = String(r.month||'').trim(); if(!mo) return;
       if(!ADVS[mo]) ADVS[mo] = {};
-      ADVS[mo][+r.employee_id] = +r.amount || 0;
+      ADVS[mo][+r.employee_id] = {
+        amount:+r.amount||0,
+        old_balance:+r.old_balance||0,
+        extra_allowance:+r.extra_allowance||0
+      };
     });
 
     const s = data.snacks || {};
@@ -2812,6 +3022,14 @@ boot();
       await sb(getSupabase().from(TABLES.EMP).upsert([row], { onConflict:'id' }), 'Add employee');
       return {ok:true};
     }
+    if(action === 'updateEmployeeBank'){
+      assertSupabaseReady();
+      await sb(getSupabase().from(TABLES.EMP).update({
+        bank_account_no:String(params.bank_account_no||'').trim(),
+        ifsc_code:String(params.ifsc_code||'').trim().toUpperCase()
+      }).eq('id', num(params.id)), 'Save bank details');
+      return {ok:true};
+    }
     if(action === 'saveAttendance'){
       assertSupabaseReady();
       const rows = (Array.isArray(params.rows)?params.rows:[]).map(r=>{ const x = attRow(r); x.unit_name = normalizeUnit(r.unit_name || r.unit || DEFAULT_UNIT); return x; });
@@ -2820,9 +3038,36 @@ boot();
     }
     if(action === 'saveAdvance'){
       assertSupabaseReady();
-      const row = advRow(params);
-      row.unit_name = normalizeUnit(params.unit_name || params.unit || DEFAULT_UNIT);
-      await sb(getSupabase().from(TABLES.ADV).upsert([row], { onConflict:'employee_id,month' }), 'Save advance');
+
+      // Save only the columns that already exist in the advances table.
+      // Do not send old_balance / extra_allowance here; older Supabase schemas
+      // throw "Could not find extra_allowance column" and block advance saving.
+      const row = cleanRow({
+        employee_id: num(params.employee_id),
+        employee_name: String(params.employee_name || '').trim(),
+        month: String(params.month || '').trim(),
+        amount: num(params.amount),
+        unit_name: normalizeUnit(params.unit_name || params.unit || DEFAULT_UNIT)
+      });
+
+      try{
+        await sb(getSupabase().from(TABLES.ADV).upsert([row], { onConflict:'employee_id,month' }), 'Save advance');
+      }catch(upsertErr){
+        // Fallback for older Supabase tables where UNIQUE(employee_id, month) was not created.
+        const existing = await sb(
+          getSupabase().from(TABLES.ADV)
+            .select('id')
+            .eq('employee_id', row.employee_id)
+            .eq('month', row.month)
+            .limit(1),
+          'Find existing advance'
+        );
+        if(Array.isArray(existing) && existing.length && existing[0].id !== undefined){
+          await sb(getSupabase().from(TABLES.ADV).update(row).eq('id', existing[0].id), 'Update advance');
+        }else{
+          await sb(getSupabase().from(TABLES.ADV).insert([row]), 'Insert advance');
+        }
+      }
       return {ok:true};
     }
     if(action === 'saveMealLog'){
@@ -2893,12 +3138,14 @@ boot();
     const dept=document.getElementById('ed').value.trim();
     const pos=document.getElementById('ep').value.trim().toUpperCase();
     const sal=+document.getElementById('es').value||0,shift=+document.getElementById('esh').value;
+    const bank_account_no=document.getElementById('eba')?.value.trim()||'';
+    const ifsc_code=(document.getElementById('eifsc')?.value.trim()||'').toUpperCase();
     const unit = LIVE_STATE.currentUser.role==='md_admin' ? (LIVE_STATE.mdScope==='ALL' ? DEFAULT_UNIT : LIVE_STATE.mdScope) : LIVE_STATE.currentUser.unit;
     const id = globalNextEmployeeId();
     setPill('busy','Saving…');
-    await gasGet({action:'addEmployee',id,name,department:dept,position:pos,salary:sal,shift,status:'ACTIVE',unit_name:unit});
+    await gasGet({action:'addEmployee',id,name,department:dept,position:pos,salary:sal,shift,status:'ACTIVE',unit_name:unit,bank_account_no,ifsc_code});
     document.getElementById('add-form').classList.remove('open');
-    ['en','ed','ep','es'].forEach(x=>document.getElementById(x).value='');
+    ['en','ed','ep','es','eba','eifsc'].forEach(x=>{const el=document.getElementById(x); if(el) el.value='';});
     await boot(true);
     toast('✓ ' + name + ' saved in ' + unit, 'ok');
   };
@@ -2947,17 +3194,34 @@ boot();
   };
 
   setAdv = async function(mo,eid,name,val){
-    const unit = (EMPS.find(e=>e.id===eid)?.unit) || (LIVE_STATE.currentUser?.unit) || DEFAULT_UNIT;
+    const emp = EMPS.find(e=>Number(e.id)===Number(eid));
+    const unit = emp?.unit || (LIVE_STATE.currentUser?.unit) || DEFAULT_UNIT;
+    const max = advanceLimit(emp);
+    let amt = Math.max(0,num(val));
+    if(amt > max){ amt = max; toast('Advance capped at 50% salary for '+name,'err'); }
     if(!ADVS[mo]) ADVS[mo] = {};
-    ADVS[mo][eid] = num(val);
+    const prev = normalizeAdvanceRecord(ADVS[mo][eid]);
+    ADVS[mo][eid] = {...prev, amount:amt};
     saveLocalCache({reason:'advance-save', allowSmallerOverwrite:true, backupCurrent:true, backupReason:'before-advance-save'});
+    setPill('busy','Saving advance…');
     try{
-      await gasGet({action:'saveAdvance',month:mo,employee_id:eid,employee_name:name,amount:num(val),unit_name:unit});
+      await gasGet({
+        action:'saveAdvance',
+        month:mo,
+        employee_id:eid,
+        employee_name:name,
+        amount:amt,
+        unit_name:unit
+      });
       setPill('ok','Synced ✓');
+      toast('✓ Advance saved to cloud','ok');
     }catch(e){
-      setPill('err','Cloud save failed'); toast('Advance was not saved to cloud','err');
+      ADVS[mo][eid] = prev;
+      setPill('err','Cloud save failed');
+      toast('Advance was not saved to cloud: '+(e && e.message ? e.message : e),'err');
     }
     renderPayroll();
+    if(typeof renderDepartmentMonthlyPayout==='function') renderDepartmentMonthlyPayout(mo);
   };
 
   saveMealStore = function(){ clearCloudOnlyCache(); };
@@ -3036,7 +3300,10 @@ boot();
 
   renderEmpTable = function(){
     const showUnit = isMdAll();
-    document.getElementById('emp-tbody').innerHTML = EMPS.map((e,i)=>`<tr>
+    document.getElementById('emp-tbody').innerHTML = EMPS.map((e,i)=>{
+      const acc=String(e.bank_account_no||'');
+      const ifsc=String(e.ifsc_code||'').toUpperCase();
+      return `<tr>
       <td class="cm">${i+1}</td>
       <td style="font-weight:500">${e.name}${showUnit?`<span class="unit-subline">${esc(e.unit)}</span>`:''}</td>
       <td><span class="badge b8">${normalizeDepartment(e.dept)}</span></td>
@@ -3044,8 +3311,10 @@ boot();
       <td class="mono">₹${fmt(e.salary)}</td>
       <td><span class="badge b${e.shift}">${e.shift}h</span></td>
       <td class="mono cm">₹${fmt(Math.round(salaryPerDay(e.salary, new Date().toISOString().slice(0,7))))}/day</td>
-      <td>${LIVE_STATE.currentUser.role==='md_admin' ? `<button class="btn btn-r btn-sm" onclick="delEmp(${e.id},'${e.name.replace(/'/g,"\\'")}')">Remove</button>` : '<span class="cm">Add only</span>'}</td>
-    </tr>`).join('')||'<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--muted)">No employees</td></tr>';
+      <td><input class="bank-inp ${acc?'':'bank-missing'}" id="bank-acc-${e.id}" value="${esc(acc)}" placeholder="Bank A/C"></td>
+      <td><input class="ifsc-inp ${ifsc?'':'bank-missing'}" id="bank-ifsc-${e.id}" value="${esc(ifsc)}" placeholder="IFSC" oninput="this.value=this.value.toUpperCase()"></td>
+      <td><button class="btn btn-g btn-sm" onclick="saveEmployeeBank(${e.id})">Save Bank</button> ${LIVE_STATE.currentUser.role==='md_admin' ? `<button class="btn btn-r btn-sm" onclick="delEmp(${e.id},'${e.name.replace(/'/g,"\'")}')">Remove</button>` : ''}</td>
+    </tr>`}).join('')||'<tr><td colspan="10" style="text-align:center;padding:24px;color:var(--muted)">No employees</td></tr>';
   };
 
   renderDashboard = function(){
@@ -3111,10 +3380,16 @@ boot();
 
   renderPayroll = function(){
     const mo=document.getElementById('pay-month').value||new Date().toISOString().slice(0,7), days=daysInMonth(mo); document.getElementById('pay-days').value=days;
-    const mealMonth = mealTotalForMonth(mo); const payRows=EMPS.map(e=>{ const ds=daInMo(mo); let daysP=0,oth=0; ds.forEach(([_,m])=>{const r=m[e.id]; if(r?.status==='P')daysP++; if(r && r.status!=='H') oth+=num(r.ot);}); const sal=Math.round(salaryPerDay(e.salary,mo)*daysP); const ota=Math.round(otRatePerHour(e.salary,mo,e.shift)*oth); const adv=num((ADVS[mo]||{})[e.id]); const food = EMPS.length ? Math.round(mealMonth/EMPS.length) : 0; return {e,daysP,oth:+oth.toFixed(2),sal,ota,food,adv,net:sal+ota-adv,total:sal+ota+food}; });
-    document.getElementById('pay-tbody').innerHTML=payRows.map((r,i)=>`<tr><td class="cm">${i+1}</td><td style="font-weight:500">${r.e.name}${isMdAll()?`<span class="unit-subline">${esc(r.e.unit)}</span>`:''}</td><td><span class="badge b${r.e.shift}">${r.e.shift}h</span></td><td><button class="btn btn-sm" onclick="openEmpAttendanceModal('${mo}',${r.e.id},'${r.e.name.replace(/'/g,"\\'")}')">${r.daysP}</button></td><td>${r.oth||0}</td><td class="mono">₹${fmt(r.sal)}</td><td class="mono ca">₹${fmt(r.ota)}</td><td class="mono cg">₹${fmt(r.food)}</td><td><input class="adv-inp" type="number" value="${r.adv}" onblur="setAdv('${mo}',${r.e.id},'${r.e.name.replace(/'/g,"\\'")}',this.value)"></td><td class="mono" style="font-weight:600">₹${fmt(r.net)}</td><td class="mono">₹${fmt(r.total)}</td></tr>`).join('');
-    const T=payRows.reduce((a,b)=>({daysP:a.daysP+b.daysP,oth:a.oth+b.oth,sal:a.sal+b.sal,ota:a.ota+b.ota,food:a.food+b.food,adv:a.adv+b.adv,net:a.net+b.net,total:a.total+b.total}),{daysP:0,oth:0,sal:0,ota:0,food:0,adv:0,net:0,total:0});
-    document.getElementById('pay-tfoot').innerHTML=`<td colspan="3">Total</td><td>${T.daysP}</td><td>${Math.round(T.oth*100)/100}</td><td>₹${fmt(T.sal)}</td><td>₹${fmt(T.ota)}</td><td>₹${fmt(T.food)}</td><td>₹${fmt(T.adv)}</td><td>₹${fmt(T.net)}</td><td>₹${fmt(T.total)}</td>`;
+    const mealMonth = mealTotalForMonth(mo);
+    const payRows=payrollAdvanceRows(mo).map(r=>{ const food = EMPS.length ? Math.round(mealMonth/EMPS.length) : 0; return {...r,e:r.emp,food,total:r.payable+food}; });
+    document.getElementById('pay-tbody').innerHTML=payRows.map((r,i)=>`<tr><td class="cm">${i+1}</td><td style="font-weight:500">${r.e.name}${isMdAll()?`<span class="unit-subline">${esc(r.e.unit)}</span>`:''}</td><td><span class="badge b${r.e.shift}">${r.e.shift}h</span></td><td><button class="btn btn-sm" onclick="openEmpAttendanceModal('${mo}',${r.e.id},'${r.e.name.replace(/'/g,"\'")}')">${r.daysP}</button></td><td>${r.oth||0}</td><td class="mono">₹${fmt(r.sal)}</td><td class="mono ca">₹${fmt(r.ota)}</td><td class="mono cg">₹${fmt(r.food)}</td><td class="mono cm">₹${fmt(r.maxAdvance)}</td><td><input class="adv-inp" type="number" min="0" max="${r.maxAdvance}" value="${r.adv}" onblur="setAdv('${mo}',${r.e.id},'${r.e.name.replace(/'/g,"\'")} ',this.value)"></td><td class="mono" style="font-weight:600">₹${fmt(r.net)}</td><td class="mono">₹${fmt(r.total)}</td></tr>`).join('');
+    const T=payRows.reduce((a,b)=>({daysP:a.daysP+b.daysP,oth:a.oth+b.oth,sal:a.sal+b.sal,ota:a.ota+b.ota,food:a.food+b.food,maxAdvance:a.maxAdvance+b.maxAdvance,adv:a.adv+b.adv,net:a.net+b.net,total:a.total+b.total}),{daysP:0,oth:0,sal:0,ota:0,food:0,maxAdvance:0,adv:0,net:0,total:0});
+    document.getElementById('pay-tfoot').innerHTML=`<td colspan="3">Total</td><td>${T.daysP}</td><td>${Math.round(T.oth*100)/100}</td><td>₹${fmt(T.sal)}</td><td>₹${fmt(T.ota)}</td><td>₹${fmt(T.food)}</td><td>₹${fmt(T.maxAdvance)}</td><td>₹${fmt(T.adv)}</td><td>₹${fmt(T.net)}</td><td>₹${fmt(T.total)}</td>`;
+    document.getElementById('pay-stats').innerHTML=`
+      <div class="stat-card"><div class="stat-label">Net Payroll</div><div class="stat-val" style="font-size:17px">₹${fmt(T.net)}</div></div>
+      <div class="stat-card"><div class="stat-label">Advance Total</div><div class="stat-val sv-a" style="font-size:17px">₹${fmt(T.adv)}</div></div>
+      <div class="stat-card"><div class="stat-label">Food / Canteen</div><div class="stat-val sv-g" style="font-size:17px">₹${fmt(T.food)}</div></div>
+      <div class="stat-card"><div class="stat-label">Total Cost</div><div class="stat-val sv-b" style="font-size:17px">₹${fmt(T.total)}</div></div>`;
   };
 
   renderOT = function(){
@@ -3140,6 +3415,617 @@ boot();
   const saved = localStorage.getItem(LIVE_LOGIN_KEY);
   if(saved){ const u = LIVE_USERS.find(x=>x.key===saved); if(u){ LIVE_STATE.currentUser=u; LIVE_STATE.mdScope = u.role==='md_admin' ? 'ALL' : u.unit; hideLiveLogin(); boot(true); } else showLiveLogin(); }
   else showLiveLogin();
+})();
+</script>
+
+
+<script>
+/* ══════════════════════════════════════════════════════════════
+   PATCH: Payroll alignment + department payout + department rent
+══════════════════════════════════════════════════════════════ */
+(function(){
+  const RENT_KEY='bgsg_department_monthly_rent_v1';
+  const RENT_LOADED={};
+  async function loadDeptRentsCloud(month){
+    if(RENT_LOADED[month]) return;
+    RENT_LOADED[month]=true;
+    try{
+      if(typeof getSupabase!=='function') return;
+      assertSupabaseReady();
+      const {data,error}=await getSupabase().from('department_rents').select('month,department,amount').eq('month',month);
+      if(error) throw error;
+      if(Array.isArray(data) && data.length){
+        const store=getRentStore();
+        if(!store[month]) store[month]={};
+        data.forEach(r=>{ if(r && r.department) store[month][String(r.department)]=Number(r.amount||0); });
+        setRentStore(store);
+        setTimeout(()=>{ try{ renderDepartmentMonthlyPayout(month); }catch(e){} },0);
+      }
+    }catch(e){ console.warn('Department rent cloud load skipped:', e.message); }
+  }
+  async function saveDeptRentCloud(month, dept, amount){
+    try{
+      if(typeof getSupabase!=='function') throw new Error('Supabase not available');
+      assertSupabaseReady();
+      const row={month,department:dept,amount:Number(amount||0)};
+      const {error}=await getSupabase().from('department_rents').upsert([row], { onConflict:'month,department' });
+      if(error) throw error;
+      return true;
+    }catch(e){
+      console.warn('Department rent cloud save skipped:', e.message);
+      return false;
+    }
+  }
+  function money(n){ return '₹'+fmt(Number(n||0)); }
+  function ehtml(s){ return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+  function jsArg(s){ return String(s??'').replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/\n/g,' '); }
+  function empDept(emp){ return normalizeDepartment(emp?.dept || emp?.department || 'Unassigned'); }
+  function getDepartments(){ return [...new Set((EMPS||[]).map(empDept))].filter(Boolean).sort((a,b)=>a.localeCompare(b)); }
+  function getRentStore(){ try{return JSON.parse(localStorage.getItem(RENT_KEY)||'{}')||{};}catch(e){return {};}}
+  function setRentStore(o){ localStorage.setItem(RENT_KEY, JSON.stringify(o||{})); }
+  function getDeptRent(month, dept){ const o=getRentStore(); return Number((o[month]||{})[dept]||0); }
+  function setDeptRent(month, dept, amount){ const o=getRentStore(); if(!o[month]) o[month]={}; o[month][dept]=Math.max(0,Number(amount||0)); setRentStore(o); }
+  function foodShareForEmployee(month){ return (EMPS&&EMPS.length) ? Math.round(mealTotalForMonth(month)/EMPS.length) : 0; }
+
+  function injectPayrollPatchStyle(){
+    if(document.getElementById('payroll-patch-style')) return;
+    const st=document.createElement('style');
+    st.id='payroll-patch-style';
+    st.textContent=`
+      #pg-payroll .scrollable{overflow-x:auto;max-width:100%;}
+      #pg-payroll .tbl.payroll-main-table{min-width:1680px;table-layout:fixed;}
+      #pg-payroll .tbl.payroll-main-table th,#pg-payroll .tbl.payroll-main-table td{padding:7px 10px;vertical-align:middle;}
+      #pg-payroll .tbl.payroll-main-table th:nth-child(1),#pg-payroll .tbl.payroll-main-table td:nth-child(1){width:44px;}
+      #pg-payroll .tbl.payroll-main-table th:nth-child(2),#pg-payroll .tbl.payroll-main-table td:nth-child(2){width:205px;}
+      #pg-payroll .tbl.payroll-main-table th:nth-child(3),#pg-payroll .tbl.payroll-main-table td:nth-child(3){width:64px;text-align:center;}
+      #pg-payroll .tbl.payroll-main-table th:nth-child(4),#pg-payroll .tbl.payroll-main-table td:nth-child(4){width:72px;text-align:center;}
+      #pg-payroll .tbl.payroll-main-table th:nth-child(5),#pg-payroll .tbl.payroll-main-table td:nth-child(5){width:78px;text-align:center;}
+      #pg-payroll .tbl.payroll-main-table th:nth-child(6),#pg-payroll .tbl.payroll-main-table td:nth-child(6){width:106px;}
+      #pg-payroll .tbl.payroll-main-table th:nth-child(7),#pg-payroll .tbl.payroll-main-table td:nth-child(7){width:100px;}
+      #pg-payroll .tbl.payroll-main-table th:nth-child(8),#pg-payroll .tbl.payroll-main-table td:nth-child(8){width:92px;}
+      #pg-payroll .tbl.payroll-main-table th:nth-child(9),#pg-payroll .tbl.payroll-main-table td:nth-child(9){width:110px;}
+      #pg-payroll .tbl.payroll-main-table th:nth-child(10),#pg-payroll .tbl.payroll-main-table td:nth-child(10){width:110px;}
+      #pg-payroll .tbl.payroll-main-table th:nth-child(11),#pg-payroll .tbl.payroll-main-table td:nth-child(11){width:145px;}
+      #pg-payroll .tbl.payroll-main-table th:nth-child(12),#pg-payroll .tbl.payroll-main-table td:nth-child(12){width:135px;}
+      #pg-payroll .tbl.payroll-main-table th:nth-child(13),#pg-payroll .tbl.payroll-main-table td:nth-child(13){width:110px;}
+      #pg-payroll .tbl.payroll-main-table th:nth-child(14),#pg-payroll .tbl.payroll-main-table td:nth-child(14){width:120px;}
+      #pg-payroll .tbl.payroll-main-table input.adv-inp,#pg-payroll .tbl.payroll-main-table input.pay-adj-inp{width:92px;padding:4px 7px;font-size:11px;}
+      #pg-payroll .tbl.payroll-main-table .emp-name{font-size:11px;font-weight:600;line-height:1.25;white-space:normal;}
+      #pg-payroll .tbl.payroll-main-table .unit-subline{display:block;font-size:9px;color:var(--muted);font-weight:500;margin-top:2px;}
+      #pg-payroll .tbl.payroll-dept-table{min-width:1450px;table-layout:fixed;}
+      #pg-payroll .tbl.payroll-dept-table th,#pg-payroll .tbl.payroll-dept-table td{padding:8px 10px;}
+      #pg-payroll .tbl.payroll-dept-table th:first-child,#pg-payroll .tbl.payroll-dept-table td:first-child{width:170px;}
+      #dept-month-payout-card .dept-mini-stats{grid-template-columns:repeat(5,minmax(0,1fr));}
+      @media (max-width:1200px){#dept-month-payout-card .dept-mini-stats{grid-template-columns:repeat(2,minmax(0,1fr));}}
+    `;
+    document.head.appendChild(st);
+  }
+
+  function ensurePayrollHeaderClass(){
+    const tbl=document.querySelector('#pg-payroll .card:first-of-type table.tbl');
+    if(tbl) tbl.classList.add('payroll-main-table');
+  }
+
+  function populateRentDepartmentSelect(month){
+    const sel=document.getElementById('dept-rent-dept'); if(!sel) return;
+    const depts=getDepartments(); const old=sel.value || depts[0] || 'Unassigned';
+    sel.innerHTML=depts.map(d=>`<option value="${ehtml(d)}">${ehtml(d)}</option>`).join('');
+    sel.value=depts.includes(old)?old:(depts[0]||'');
+    const amt=document.getElementById('dept-rent-amount'); if(amt && sel.value) amt.value=getDeptRent(month, sel.value)||0;
+    sel.onchange=function(){ const amt=document.getElementById('dept-rent-amount'); if(amt) amt.value=getDeptRent(month, sel.value)||0; };
+  }
+
+  function getDepartmentMonthlyPayoutRows(month){
+    const foodPerEmp=foodShareForEmployee(month);
+    const groups=new Map();
+    (payrollAdvanceRows(month)||[]).forEach(r=>{
+      const dept=empDept(r.emp);
+      if(!groups.has(dept)) groups.set(dept,{department:dept,employees:0,presentDays:0,otHours:0,salary:0,otAmount:0,oldBalance:0,extraAllowance:0,advance:0,netSalaryPayout:0,foodShare:0,rent:0,totalDeptCost:0});
+      const g=groups.get(dept);
+      g.employees += 1;
+      g.presentDays += Number(r.daysP||0);
+      g.otHours += Number(r.oth||0);
+      g.salary += Number(r.sal||0);
+      g.otAmount += Number(r.ota||0);
+      g.oldBalance += Number(r.oldBalance||0);
+      g.extraAllowance += Number(r.extraAllowance||0);
+      g.advance += Number(r.adv||0);
+      g.netSalaryPayout += Number(r.net||0);
+      g.foodShare += foodPerEmp;
+    });
+    groups.forEach((g,dept)=>{ g.rent=getDeptRent(month,dept); g.totalDeptCost=g.netSalaryPayout+g.foodShare+g.rent; g.otHours=Math.round(g.otHours*100)/100; });
+    return [...groups.values()].sort((a,b)=>a.department.localeCompare(b.department));
+  }
+
+  window.renderDepartmentMonthlyPayout = function(month){
+    const mo=month || (document.getElementById('pay-month')?.value || new Date().toISOString().slice(0,7));
+    loadDeptRentsCloud(mo);
+    populateRentDepartmentSelect(mo);
+    const rows=getDepartmentMonthlyPayoutRows(mo);
+    const tbody=document.getElementById('dept-payout-body');
+    const foot=document.getElementById('dept-payout-foot');
+    const sum=document.getElementById('dept-payout-summary');
+    if(!tbody || !foot || !sum) return;
+    tbody.innerHTML=rows.map(r=>`<tr>
+      <td style="font-weight:600">${ehtml(r.department)}</td>
+      <td class="mono">${r.employees}</td>
+      <td class="mono">${r.presentDays}</td>
+      <td class="mono">${r.otHours}</td>
+      <td class="mono">${money(r.salary)}</td>
+      <td class="mono ca">${r.otAmount<0?'-':''}${money(Math.abs(r.otAmount))}</td>
+      <td class="mono">${r.oldBalance<0?'-':''}${money(Math.abs(r.oldBalance))}</td>
+      <td class="mono cg">${money(r.extraAllowance)}</td>
+      <td class="mono ca">${money(r.advance)}</td>
+      <td class="mono" style="font-weight:600">${money(r.netSalaryPayout)}</td>
+      <td class="mono cg">${money(r.foodShare)}</td>
+      <td class="mono cb">${money(r.rent)}</td>
+      <td class="mono" style="font-weight:700;color:var(--accent)">${money(r.totalDeptCost)}</td>
+    </tr>`).join('') || '<tr><td colspan="13" style="text-align:center;padding:20px;color:var(--muted)">No department data</td></tr>';
+    const T=rows.reduce((a,b)=>{ Object.keys(a).forEach(k=>{ a[k]+=Number(b[k]||0); }); return a; },{employees:0,presentDays:0,otHours:0,salary:0,otAmount:0,oldBalance:0,extraAllowance:0,advance:0,netSalaryPayout:0,foodShare:0,rent:0,totalDeptCost:0});
+    foot.innerHTML=`<td>Total</td><td>${T.employees}</td><td>${T.presentDays}</td><td>${Math.round(T.otHours*100)/100}</td><td>${money(T.salary)}</td><td>${T.otAmount<0?'-':''}${money(Math.abs(T.otAmount))}</td><td>${T.oldBalance<0?'-':''}${money(Math.abs(T.oldBalance))}</td><td>${money(T.extraAllowance)}</td><td>${money(T.advance)}</td><td>${money(T.netSalaryPayout)}</td><td>${money(T.foodShare)}</td><td>${money(T.rent)}</td><td>${money(T.totalDeptCost)}</td>`;
+    sum.innerHTML=`
+      <div class="dept-mini-card"><div class="k">Departments</div><div class="v">${rows.length}</div><div class="s">monthly view</div></div>
+      <div class="dept-mini-card"><div class="k">Net Salary Payout</div><div class="v">${money(T.netSalaryPayout)}</div><div class="s">after advance</div></div>
+      <div class="dept-mini-card"><div class="k">Advance</div><div class="v">${money(T.advance)}</div><div class="s">deducted</div></div>
+      <div class="dept-mini-card"><div class="k">Department Rent</div><div class="v">${money(T.rent)}</div><div class="s">extra dept cost</div></div>
+      <div class="dept-mini-card"><div class="k">Total Dept Cost</div><div class="v">${money(T.totalDeptCost)}</div><div class="s">salary + food + rent</div></div>`;
+  };
+
+  window.saveDepartmentRentFromUI = async function(){
+    const mo=(typeof window.syncDeptPayrollMonth==='function') ? window.syncDeptPayrollMonth((document.getElementById('dept-pay-month')?.value || document.getElementById('pay-month')?.value || new Date().toISOString().slice(0,7))) : (document.getElementById('pay-month')?.value || new Date().toISOString().slice(0,7));
+    const dept=document.getElementById('dept-rent-dept')?.value;
+    const amt=Number(document.getElementById('dept-rent-amount')?.value||0);
+    if(!dept){ toast('Please select department for rent','err'); return; }
+    setDeptRent(mo, dept, amt);
+    renderDepartmentMonthlyPayout(mo);
+    try{ saveLocalCache({reason:'department-rent-save'}); }catch(e){}
+    const cloudOk=await saveDeptRentCloud(mo, dept, amt);
+    toast(cloudOk ? ('✓ Rent saved for '+dept+' / '+mo) : ('✓ Rent saved locally. Create department_rents table for cloud sync.'), cloudOk?'ok':'i');
+  };
+
+  window.exportDepartmentPayoutExcel = function(){
+    const mo=document.getElementById('pay-month')?.value || new Date().toISOString().slice(0,7);
+    const rows=getDepartmentMonthlyPayoutRows(mo).map(r=>({
+      'Department': r.department,
+      'Employees': r.employees,
+      'Present Days': r.presentDays,
+      'OT Hours': r.otHours,
+      'Salary Amount': Math.round(r.salary),
+      'OT Amount': Math.round(r.otAmount),
+      'Old Balance / Adjustment': Math.round(r.oldBalance),
+      'Extra Allowance': Math.round(r.extraAllowance),
+      'Advance Deducted': Math.round(r.advance),
+      'Net Salary Payout': Math.round(r.netSalaryPayout),
+      'Food Share Company Expense': Math.round(r.foodShare),
+      'Department Rent': Math.round(r.rent),
+      'Total Department Cost': Math.round(r.totalDeptCost)
+    }));
+    if(!window.XLSX){ toast('Excel library not loaded. Check internet and refresh.','err'); return; }
+    const ws=XLSX.utils.json_to_sheet(rows);
+    ws['!cols']=[{wch:20},{wch:10},{wch:12},{wch:10},{wch:14},{wch:12},{wch:22},{wch:16},{wch:16},{wch:18},{wch:24},{wch:16},{wch:20}];
+    const wb=XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Dept Payout '+mo);
+    XLSX.writeFile(wb, 'Department_Payout_'+mo+'.xlsx');
+  };
+
+  window.exportAdvanceExcel = function(){
+    const mo=document.getElementById('pay-month')?.value || new Date().toISOString().slice(0,7);
+    const rows=(payrollAdvanceRows(mo)||[]).map((r,i)=>({
+      'S.No.': i+1,
+      'Department': empDept(r.emp),
+      'Employee Name': r.emp.name,
+      'Present Days': r.daysP,
+      'OT Hours': r.oth,
+      'Basic Salary': r.emp.salary,
+      'Payable Salary Current Month': r.payable,
+      'Max Advance Allowed (50%)': r.maxAdvance,
+      'Advance Amount': r.adv,
+      'Old Balance / Adjustment': r.oldBalance,
+      'Extra Allowance': r.extraAllowance,
+      'Net Pay After Advance': r.net,
+      'Bank Account Number': r.bank,
+      'IFSC Code': r.ifsc,
+      'Bank Status': (r.bank && r.ifsc) ? 'OK' : 'MISSING BANK DETAILS'
+    }));
+    if(!window.XLSX){ toast('Excel library not loaded. Check internet and refresh.','err'); return; }
+    const ws=XLSX.utils.json_to_sheet(rows);
+    ws['!cols']=[{wch:7},{wch:18},{wch:28},{wch:12},{wch:10},{wch:13},{wch:22},{wch:20},{wch:15},{wch:22},{wch:16},{wch:19},{wch:24},{wch:14},{wch:22}];
+    const wb=XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Advance '+mo);
+    XLSX.writeFile(wb, 'Advance_Export_'+mo+'.xlsx');
+  };
+
+  window.renderPayroll = function(){
+    injectPayrollPatchStyle(); ensurePayrollHeaderClass();
+    const pmEl=document.getElementById('pay-month');
+    if(!pmEl) return;
+    if(!pmEl.value) pmEl.value=new Date().toISOString().slice(0,7);
+    const mo=pmEl.value, dim=daysInMonth(mo), foodMonth=mealTotalForMonth(mo), foodPerEmp=foodShareForEmployee(mo);
+    const payDaysEl=document.getElementById('pay-days'); if(payDaysEl) payDaysEl.value=dim;
+    const rowsData=payrollAdvanceRows(mo)||[];
+    let T={daysP:0,oth:0,sal:0,ota:0,food:0,maxAdvance:0,adv:0,old:0,extra:0,net:0,total:0};
+    const rows=rowsData.map((r,i)=>{
+      const e=r.emp||{};
+      const food=foodPerEmp;
+      const total=Number(r.net||0)+food;
+      T.daysP+=Number(r.daysP||0); T.oth+=Number(r.oth||0); T.sal+=Number(r.sal||0); T.ota+=Number(r.ota||0); T.food+=food; T.maxAdvance+=Number(r.maxAdvance||0); T.adv+=Number(r.adv||0); T.old+=Number(r.oldBalance||0); T.extra+=Number(r.extraAllowance||0); T.net+=Number(r.net||0); T.total+=total;
+      return `<tr>
+        <td class="cm">${i+1}</td>
+        <td><div class="emp-name">${ehtml(e.name)}${(typeof isMdAll==='function' && isMdAll())?`<span class="unit-subline">${ehtml(e.unit)}</span>`:''}</div></td>
+        <td><span class="badge b${e.shift}">${e.shift}h</span></td>
+        <td><button class="btn btn-sm" onclick="openEmpAttendanceModal('${mo}',${e.id},'${jsArg(e.name)}')">${r.daysP}</button></td>
+        <td class="mono">${Number(r.oth||0)>0?'+':''}${r.oth||0}</td>
+        <td class="mono">${money(r.sal)}</td>
+        <td class="mono ca">${Number(r.ota||0)<0?'-':''}${money(Math.abs(Number(r.ota||0)))}</td>
+        <td class="mono cg">${money(food)}</td>
+        <td class="mono cm">${money(r.maxAdvance)}</td>
+        <td><input class="adv-inp" type="number" min="0" max="${r.maxAdvance}" value="${r.adv}" onchange="setAdv('${mo}',${e.id},'${jsArg(e.name)}',this.value)"></td>
+        <td><input class="pay-adj-inp" type="number" value="${r.oldBalance}" title="Positive = old pending balance, negative = deduction" onchange="setPayrollAdjustment('${mo}',${e.id},'${jsArg(e.name)}','old_balance',this.value)"></td>
+        <td><input class="pay-adj-inp" type="number" min="0" value="${r.extraAllowance}" onchange="setPayrollAdjustment('${mo}',${e.id},'${jsArg(e.name)}','extra_allowance',this.value)"></td>
+        <td class="mono" style="font-weight:700">${money(r.net)}</td>
+        <td class="mono cb" style="font-weight:700">${money(total)}</td>
+      </tr>`;
+    }).join('');
+    const body=document.getElementById('pay-tbody'); if(body) body.innerHTML=rows || '<tr><td colspan="14" style="text-align:center;padding:20px;color:var(--muted)">No payroll data</td></tr>';
+    const foot=document.getElementById('pay-tfoot');
+    if(foot) foot.innerHTML=`<td colspan="3">Total</td><td>${T.daysP}</td><td>${Math.round(T.oth*100)/100}</td><td>${money(T.sal)}</td><td>${T.ota<0?'-':''}${money(Math.abs(T.ota))}</td><td>${money(T.food || foodMonth)}</td><td>${money(T.maxAdvance)}</td><td>${money(T.adv)}</td><td>${T.old<0?'-':''}${money(Math.abs(T.old))}</td><td>${money(T.extra)}</td><td style="font-size:13px">${money(T.net)}</td><td style="font-size:13px">${money(T.total)}</td>`;
+    const stats=document.getElementById('pay-stats');
+    if(stats) stats.innerHTML=`
+      <div class="stat-card"><div class="stat-label">Net Payroll</div><div class="stat-val" style="font-size:17px">${money(T.net)}</div></div>
+      <div class="stat-card"><div class="stat-label">Advance Total</div><div class="stat-val sv-a" style="font-size:17px">${money(T.adv)}</div></div>
+      <div class="stat-card"><div class="stat-label">Old Balance + Allowance</div><div class="stat-val sv-g" style="font-size:17px">${money(T.old+T.extra)}</div></div>
+      <div class="stat-card"><div class="stat-label">Total Cost incl. Food</div><div class="stat-val sv-b" style="font-size:17px">${money(T.total)}</div></div>`;
+    renderDepartmentMonthlyPayout(mo);
+  };
+
+  injectPayrollPatchStyle(); ensurePayrollHeaderClass();
+  setTimeout(()=>{ try{ renderPayroll(); }catch(e){ console.warn('Payroll patch render skipped:', e.message); } }, 500);
+})();
+</script>
+
+
+<script>
+/* PATCH: Detailed department-wise payout with employee list */
+(function(){
+  const RENT_KEY='bgsg_department_monthly_rent_v1';
+  const RENT_LOADED_DETAIL={};
+  function n(v){ const x=Number(v); return Number.isFinite(x)?x:0; }
+  function mny(v){ return '₹'+(typeof fmt==='function' ? fmt(Math.round(n(v))) : Math.round(n(v)).toLocaleString('en-IN')); }
+  function esc2(s){ return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+  function deptOf(emp){ try{ if(typeof normalizeDepartment==='function') return normalizeDepartment(emp?.dept || emp?.department || 'Unassigned'); }catch(e){} return String(emp?.dept || emp?.department || 'Unassigned').trim() || 'Unassigned'; }
+  function getRentStore2(){ try{return JSON.parse(localStorage.getItem(RENT_KEY)||'{}')||{};}catch(e){return{};} }
+  function setRentStore2(o){ try{ localStorage.setItem(RENT_KEY, JSON.stringify(o||{})); }catch(e){} }
+  function getDeptRent2(month, dept){ const o=getRentStore2(); return n((o[month]||{})[dept]); }
+  async function loadDeptRentCloud2(month){
+    if(RENT_LOADED_DETAIL[month]) return;
+    RENT_LOADED_DETAIL[month]=true;
+    try{
+      if(typeof getSupabase!=='function' || typeof assertSupabaseReady!=='function') return;
+      assertSupabaseReady();
+      const {data,error}=await getSupabase().from('department_rents').select('month,department,amount').eq('month',month);
+      if(error) throw error;
+      if(Array.isArray(data) && data.length){
+        const store=getRentStore2();
+        if(!store[month]) store[month]={};
+        data.forEach(r=>{ if(r && r.department) store[month][String(r.department)]=n(r.amount); });
+        setRentStore2(store);
+      }
+    }catch(e){ console.warn('Department rent detail cloud load skipped:', e.message); }
+  }
+  function foodPerEmployee(month){ try{ return (Array.isArray(EMPS) && EMPS.length) ? Math.round(mealTotalForMonth(month)/EMPS.length) : 0; }catch(e){ return 0; } }
+  function detailRows(month){
+    const food=foodPerEmployee(month);
+    const rows=(typeof payrollAdvanceRows==='function' ? payrollAdvanceRows(month) : []).map(r=>{
+      const emp=r.emp||{};
+      return { dept:deptOf(emp), emp, name:emp.name||r.name||'', days:n(r.daysP), otHrs:n(r.oth), basic:n(emp.salary), salary:n(r.sal), otAmt:n(r.ota), old:n(r.oldBalance), extra:n(r.extraAllowance), adv:n(r.adv), net:n(r.net), food, empTotal:n(r.net)+food, bank:r.bank||emp.bank_account_no||'', ifsc:r.ifsc||emp.ifsc_code||'' };
+    });
+    rows.sort((a,b)=>(a.dept.localeCompare(b.dept)||a.name.localeCompare(b.name)));
+    return rows;
+  }
+  window.syncDeptPayrollMonth = function(month){
+    const mo = month || new Date().toISOString().slice(0,7);
+    const pm = document.getElementById('pay-month');
+    const dm = document.getElementById('dept-pay-month');
+    if(pm && pm.value !== mo) pm.value = mo;
+    if(dm && dm.value !== mo) dm.value = mo;
+    return mo;
+  };
+
+  function groupRows(month){
+    const map=new Map();
+    detailRows(month).forEach(r=>{
+      if(!map.has(r.dept)) map.set(r.dept,{department:r.dept,employees:0,days:0,otHrs:0,basic:0,salary:0,otAmt:0,old:0,extra:0,adv:0,net:0,food:0,rent:0,total:0,children:[]});
+      const g=map.get(r.dept);
+      g.employees++; g.days+=r.days; g.otHrs+=r.otHrs; g.basic+=r.basic; g.salary+=r.salary; g.otAmt+=r.otAmt; g.old+=r.old; g.extra+=r.extra; g.adv+=r.adv; g.net+=r.net; g.food+=r.food; g.children.push(r);
+    });
+    map.forEach(g=>{ g.rent=getDeptRent2(month,g.department); g.total=g.net+g.food+g.rent; g.otHrs=Math.round(g.otHrs*100)/100; });
+    return [...map.values()].sort((a,b)=>a.department.localeCompare(b.department));
+  }
+  function ensureDeptDetailStyle(){
+    if(document.getElementById('dept-detail-payout-style')) return;
+    const st=document.createElement('style'); st.id='dept-detail-payout-style';
+    st.textContent=`
+      #dept-month-payout-card .scrollable{overflow-x:auto;}
+      #dept-month-payout-card table.payroll-dept-table{min-width:1720px;table-layout:fixed;}
+      #dept-month-payout-card table.payroll-dept-table th,#dept-month-payout-card table.payroll-dept-table td{padding:7px 9px;vertical-align:middle;}
+      #dept-month-payout-card table.payroll-dept-table th:nth-child(1),#dept-month-payout-card table.payroll-dept-table td:nth-child(1){width:260px;}
+      #dept-month-payout-card table.payroll-dept-table th:nth-child(2),#dept-month-payout-card table.payroll-dept-table td:nth-child(2){width:88px;text-align:center;}
+      #dept-month-payout-card table.payroll-dept-table th:nth-child(3),#dept-month-payout-card table.payroll-dept-table td:nth-child(3){width:86px;text-align:center;}
+      #dept-month-payout-card table.payroll-dept-table th:nth-child(4),#dept-month-payout-card table.payroll-dept-table td:nth-child(4){width:110px;}
+      #dept-month-payout-card table.payroll-dept-table th:nth-child(5),#dept-month-payout-card table.payroll-dept-table td:nth-child(5){width:116px;}
+      #dept-month-payout-card table.payroll-dept-table th:nth-child(6),#dept-month-payout-card table.payroll-dept-table td:nth-child(6){width:108px;}
+      #dept-month-payout-card table.payroll-dept-table th:nth-child(7),#dept-month-payout-card table.payroll-dept-table td:nth-child(7){width:126px;}
+      #dept-month-payout-card table.payroll-dept-table th:nth-child(8),#dept-month-payout-card table.payroll-dept-table td:nth-child(8){width:126px;}
+      #dept-month-payout-card table.payroll-dept-table th:nth-child(9),#dept-month-payout-card table.payroll-dept-table td:nth-child(9){width:108px;}
+      #dept-month-payout-card table.payroll-dept-table th:nth-child(10),#dept-month-payout-card table.payroll-dept-table td:nth-child(10){width:116px;}
+      #dept-month-payout-card table.payroll-dept-table th:nth-child(11),#dept-month-payout-card table.payroll-dept-table td:nth-child(11){width:100px;}
+      #dept-month-payout-card table.payroll-dept-table th:nth-child(12),#dept-month-payout-card table.payroll-dept-table td:nth-child(12){width:100px;}
+      #dept-month-payout-card table.payroll-dept-table th:nth-child(13),#dept-month-payout-card table.payroll-dept-table td:nth-child(13){width:128px;}
+      .dept-group-row td{background:#fffbf0!important;border-top:1px solid #fcd34d;border-bottom:1px solid #fde68a;font-weight:700;}
+      .dept-emp-row td:first-child{padding-left:24px!important;}
+      .dept-emp-name{font-weight:600;font-size:12px;line-height:1.25;}
+      .dept-emp-sub{display:block;font-size:9px;color:var(--muted);font-weight:500;margin-top:2px;}
+      .dept-total-row td{background:#f9fafb!important;font-weight:700;border-bottom:1px solid var(--border);}
+      .dept-note{font-size:11px;color:var(--muted);padding:0 18px 10px;}
+    `;
+    document.head.appendChild(st);
+  }
+  function updateDeptHeader(){
+    const card=document.getElementById('dept-month-payout-card');
+    const title=card?.querySelector('.card-hdr h3');
+    if(title) title.innerHTML='Department-wise Monthly Payout Detail <span style="font-weight:400;color:var(--muted);font-size:11px">(department group + employee-wise salary, OT, advance, adjustment, allowance and rent)</span>';
+    const table=card?.querySelector('table.payroll-dept-table');
+    if(table){ const thead=table.querySelector('thead'); if(thead) thead.innerHTML='<tr><th>Department / Employee</th><th>Present Days</th><th>OT Hrs</th><th>Basic Salary ₹</th><th>Payable Salary ₹</th><th>OT ₹</th><th>Old Bal./Adj. ₹</th><th>Extra Allow. ₹</th><th>Advance ₹</th><th>Net Pay ₹</th><th>Food Share ₹</th><th>Rent ₹</th><th>Total Cost ₹</th></tr>'; }
+    let note=document.getElementById('dept-payout-detail-note');
+    const sum=document.getElementById('dept-payout-summary');
+    if(sum && !note){ note=document.createElement('div'); note.id='dept-payout-detail-note'; note.className='dept-note'; note.textContent='Rent is added once at department total level, not to each employee salary. Employee rows show exact net payout after advance.'; sum.parentNode.insertBefore(note, sum.nextSibling); }
+  }
+  window.renderDepartmentMonthlyPayout = async function(month){
+    injectCompactStyle(); updateHeader();
+    const mo=month || getMonth();
+    const dm=document.getElementById('dept-pay-month'); const pm=document.getElementById('pay-month');
+    if(dm && dm.value!==mo) dm.value=mo; if(pm && pm.value!==mo) pm.value=mo;
+    await loadRentCloud(mo);
+    populateRentSelect(mo);
+    const selectedFilter=populateDepartmentFilter();
+    const allGroups=groups(mo);
+    const gs=selectedFilter==='ALL' ? allGroups : allGroups.filter(g=>g.department===selectedFilter);
+    const tbody=document.getElementById('dept-payout-body');
+    const foot=document.getElementById('dept-payout-foot');
+    const sum=document.getElementById('dept-payout-summary');
+    const note=document.getElementById('dept-payout-detail-note');
+    if(!tbody || !foot || !sum) return;
+    const html=[];
+    gs.forEach(g=>{
+      html.push(`<tr class="dept-group-row"><td>🏷 ${esc(g.department)}</td><td class="mono">${g.days}</td><td class="mono">${g.otHrs}</td><td class="mono">${rupee(g.basic)}</td><td class="mono">${rupee(g.salary)}</td><td class="mono ${g.otAmount<0?'cr':'ca'}">${g.otAmount<0?'-':''}${rupee(Math.abs(g.otAmount))}</td><td class="mono">${rupee(g.netPayable)}</td><td class="mono cb">${rupee(g.rent)}</td><td class="mono" style="color:var(--accent)">${rupee(g.total)}</td></tr>`);
+      g.children.forEach(r=>{
+        html.push(`<tr class="dept-emp-row"><td><span class="dept-emp-name">${esc(r.name)}</span><span class="dept-emp-sub">${esc(r.position)}</span></td><td class="mono">${r.days}</td><td class="mono">${Math.round(r.otHrs*100)/100}</td><td class="mono">${rupee(r.basic)}</td><td class="mono">${rupee(r.salary)}</td><td class="mono ${r.otAmount<0?'cr':'ca'}">${r.otAmount<0?'-':''}${rupee(Math.abs(r.otAmount))}</td><td class="mono">${rupee(r.netPayable)}</td><td class="mono cm">—</td><td class="mono">${rupee(r.netPayable)}</td></tr>`);
+      });
+      html.push(`<tr class="dept-total-row"><td>${esc(g.department)} Total (${g.employees} emp)</td><td>${g.days}</td><td>${g.otHrs}</td><td>${rupee(g.basic)}</td><td>${rupee(g.salary)}</td><td>${g.otAmount<0?'-':''}${rupee(Math.abs(g.otAmount))}</td><td>${rupee(g.netPayable)}</td><td>${rupee(g.rent)}</td><td>${rupee(g.total)}</td></tr>`);
+    });
+    tbody.innerHTML=html.join('') || '<tr><td colspan="9" style="text-align:center;padding:20px;color:var(--muted)">No department payout data</td></tr>';
+    const T=gs.reduce((a,g)=>{ ['employees','days','otHrs','basic','salary','otAmount','netPayable','rent','total'].forEach(k=>a[k]+=toNum(g[k])); return a; },{employees:0,days:0,otHrs:0,basic:0,salary:0,otAmount:0,netPayable:0,rent:0,total:0});
+    foot.innerHTML=`<td>${selectedFilter==='ALL' ? `Total (${T.employees} employees)` : esc(selectedFilter+' Total')}</td><td>${T.days}</td><td>${Math.round(T.otHrs*100)/100}</td><td>${rupee(T.basic)}</td><td>${rupee(T.salary)}</td><td>${T.otAmount<0?'-':''}${rupee(Math.abs(T.otAmount))}</td><td>${rupee(T.netPayable)}</td><td>${rupee(T.rent)}</td><td>${rupee(T.total)}</td>`;
+    const titleLabel = selectedFilter==='ALL' ? 'All Departments' : selectedFilter;
+    const detailLine = selectedFilter==='ALL' ? 'showing all departments together' : 'filtered department view';
+    sum.innerHTML=`<div class="dept-mini-card ${selectedFilter!=='ALL'?'is-active':''}"><div class="k">Selected View</div><div class="v">${esc(titleLabel)}</div><div class="s">${detailLine}</div></div><div class="dept-mini-card"><div class="k">Departments</div><div class="v">${gs.length}</div><div class="s">visible in current view</div></div><div class="dept-mini-card"><div class="k">Employees</div><div class="v">${T.employees}</div><div class="s">employee-wise detail</div></div><div class="dept-mini-card"><div class="k">Net Payable / Total</div><div class="v">${rupee(T.netPayable)} / ${rupee(T.total)}</div><div class="s">rent added once per department</div></div>`;
+    if(note) note.textContent = selectedFilter==='ALL'
+      ? 'Showing all departments. Choose a department from the View filter to see only that department in the summary boxes and table.'
+      : `Showing only ${selectedFilter} department in the summary boxes and detailed list.`;
+  };
+  window.exportDepartmentPayoutExcel = function(){
+    const mo=window.syncDeptPayrollMonth((document.getElementById('dept-pay-month')?.value || document.getElementById('pay-month')?.value || new Date().toISOString().slice(0,7)));
+    const groups=groupRows(mo), data=[];
+    groups.forEach(g=>{ data.push({'Row Type':'DEPARTMENT TOTAL','Department':g.department,'Employee Name':'','Present Days':g.days,'OT Hours':g.otHrs,'Basic Salary':Math.round(g.basic),'Payable Salary':Math.round(g.salary),'OT Amount':Math.round(g.otAmt),'Old Balance / Adjustment':Math.round(g.old),'Extra Allowance':Math.round(g.extra),'Advance':Math.round(g.adv),'Net Pay':Math.round(g.net),'Food Share':Math.round(g.food),'Department Rent':Math.round(g.rent),'Total Cost':Math.round(g.total),'Bank Account Number':'','IFSC Code':''}); g.children.forEach(r=>data.push({'Row Type':'EMPLOYEE','Department':r.dept,'Employee Name':r.name,'Present Days':r.days,'OT Hours':Math.round(r.otHrs*100)/100,'Basic Salary':Math.round(r.basic),'Payable Salary':Math.round(r.salary),'OT Amount':Math.round(r.otAmt),'Old Balance / Adjustment':Math.round(r.old),'Extra Allowance':Math.round(r.extra),'Advance':Math.round(r.adv),'Net Pay':Math.round(r.net),'Food Share':Math.round(r.food),'Department Rent':'','Total Cost':Math.round(r.empTotal),'Bank Account Number':r.bank,'IFSC Code':r.ifsc})); });
+    if(!window.XLSX){ if(typeof toast==='function') toast('Excel library not loaded. Check internet and refresh.','err'); return; }
+    const ws=XLSX.utils.json_to_sheet(data); ws['!cols']=[{wch:18},{wch:18},{wch:28},{wch:12},{wch:10},{wch:13},{wch:14},{wch:12},{wch:22},{wch:16},{wch:11},{wch:12},{wch:12},{wch:16},{wch:13},{wch:22},{wch:14}];
+    const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Dept Employee Payout '+mo); XLSX.writeFile(wb, 'Department_Employee_Payout_'+mo+'.xlsx');
+  };
+  setTimeout(()=>{ try{ window.renderDepartmentMonthlyPayout(); }catch(e){ console.warn('Detailed dept payout render skipped:', e.message); } }, 700);
+})();
+</script>
+
+
+
+<script>
+/* PATCH: Compact Department Wise Payout — employee detail, net payable + rent only */
+(function(){
+  const RENT_KEY='bgsg_department_monthly_rent_v1';
+  const RENT_CLOUD_LOADED={};
+  function toNum(v){ const n=Number(v); return Number.isFinite(n)?n:0; }
+  function rupee(v){ return '₹'+(typeof fmt==='function' ? fmt(Math.round(toNum(v))) : Math.round(toNum(v)).toLocaleString('en-IN')); }
+  function esc(s){ return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+  function getMonth(){
+    const dm=document.getElementById('dept-pay-month');
+    const pm=document.getElementById('pay-month');
+    const mo=(dm&&dm.value) || (pm&&pm.value) || new Date().toISOString().slice(0,7);
+    if(dm && dm.value!==mo) dm.value=mo;
+    if(pm && pm.value!==mo) pm.value=mo;
+    return mo;
+  }
+  function deptOf(emp){
+    try{ if(typeof normalizeDepartment==='function') return normalizeDepartment(emp?.dept || emp?.department || 'Unassigned'); }catch(e){}
+    return String(emp?.dept || emp?.department || 'Unassigned').trim() || 'Unassigned';
+  }
+  function rentStore(){ try{return JSON.parse(localStorage.getItem(RENT_KEY)||'{}')||{};}catch(e){return{};} }
+  function saveRentStore(o){ try{localStorage.setItem(RENT_KEY, JSON.stringify(o||{}));}catch(e){} }
+  function getRent(month, dept){ const s=rentStore(); return toNum((s[month]||{})[dept]); }
+  async function loadRentCloud(month){
+    if(RENT_CLOUD_LOADED[month]) return;
+    RENT_CLOUD_LOADED[month]=true;
+    try{
+      if(typeof getSupabase!=='function' || typeof assertSupabaseReady!=='function') return;
+      assertSupabaseReady();
+      const {data,error}=await getSupabase().from('department_rents').select('month,department,amount').eq('month',month);
+      if(error) throw error;
+      if(Array.isArray(data) && data.length){
+        const s=rentStore(); if(!s[month]) s[month]={};
+        data.forEach(r=>{ if(r && r.department) s[month][String(r.department)]=toNum(r.amount); });
+        saveRentStore(s);
+      }
+    }catch(e){ console.warn('Department rent compact load skipped:', e.message); }
+  }
+  function rows(month){
+    const src=(typeof payrollAdvanceRows==='function' ? payrollAdvanceRows(month) : []);
+    const list=src.map(r=>{
+      const emp=r.emp||{};
+      const salary=toNum(r.sal);
+      const otAmount=toNum(r.ota);
+      const advance=toNum(r.adv);
+      const netPayable=toNum(r.payable || (salary + otAmount));
+      return {dept:deptOf(emp), emp, name:emp.name||r.name||'', position:emp.position||emp.pos||'Employee', days:toNum(r.daysP), otHrs:toNum(r.oth), basic:toNum(emp.salary), salary, otAmount, advance, netPayable, bank:r.bank||emp.bank_account_no||'', ifsc:r.ifsc||emp.ifsc_code||''};
+    });
+    list.sort((a,b)=>a.dept.localeCompare(b.dept)||a.name.localeCompare(b.name));
+    return list;
+  }
+  function groups(month){
+    const map=new Map();
+    rows(month).forEach(r=>{
+      if(!map.has(r.dept)) map.set(r.dept,{department:r.dept,employees:0,days:0,otHrs:0,basic:0,salary:0,otAmount:0,advance:0,netPayable:0,rent:0,total:0,children:[]});
+      const g=map.get(r.dept);
+      g.employees++; g.days+=r.days; g.otHrs+=r.otHrs; g.basic+=r.basic; g.salary+=r.salary; g.otAmount+=r.otAmount; g.advance+=r.advance; g.netPayable+=r.netPayable; g.children.push(r);
+    });
+    map.forEach(g=>{ g.otHrs=Math.round(g.otHrs*100)/100; g.rent=getRent(month,g.department); g.total=g.netPayable+g.rent; });
+    return [...map.values()].sort((a,b)=>a.department.localeCompare(b.department));
+  }
+  function injectCompactStyle(){
+    let st=document.getElementById('dept-payout-compact-net-style');
+    if(st) return;
+    st=document.createElement('style'); st.id='dept-payout-compact-net-style';
+    st.textContent=`
+      #pg-deptpayroll .card-hdr{align-items:flex-start;gap:10px;}
+      #pg-deptpayroll .card-hdr .cha{gap:6px;}
+      #pg-deptpayroll .card-hdr .cha label{font-weight:600;}
+      #dept-month-payout-card .scrollable{overflow:auto;max-height:calc(100vh - 265px);padding:0 12px 12px!important;}
+      #dept-month-payout-card table.payroll-dept-table{min-width:1060px;width:100%;table-layout:fixed;font-size:11px;}
+      #dept-month-payout-card table.payroll-dept-table th,#dept-month-payout-card table.payroll-dept-table td{padding:6px 7px;vertical-align:middle;line-height:1.25;}
+      #dept-month-payout-card table.payroll-dept-table thead th{position:sticky;top:0;z-index:10;background:#e5e7eb!important;color:#374151!important;font-weight:800!important;border-bottom:1px solid #cbd5e1!important;box-shadow:0 1px 0 #cbd5e1;text-transform:uppercase;letter-spacing:.55px;}
+      #dept-month-payout-card table.payroll-dept-table th:nth-child(1),#dept-month-payout-card table.payroll-dept-table td:nth-child(1){width:260px;}
+      #dept-month-payout-card table.payroll-dept-table th:nth-child(2),#dept-month-payout-card table.payroll-dept-table td:nth-child(2){width:70px;text-align:center;}
+      #dept-month-payout-card table.payroll-dept-table th:nth-child(3),#dept-month-payout-card table.payroll-dept-table td:nth-child(3){width:70px;text-align:center;}
+      #dept-month-payout-card table.payroll-dept-table th:nth-child(4),#dept-month-payout-card table.payroll-dept-table td:nth-child(4){width:105px;text-align:right;}
+      #dept-month-payout-card table.payroll-dept-table th:nth-child(5),#dept-month-payout-card table.payroll-dept-table td:nth-child(5){width:105px;text-align:right;}
+      #dept-month-payout-card table.payroll-dept-table th:nth-child(6),#dept-month-payout-card table.payroll-dept-table td:nth-child(6){width:95px;text-align:right;}
+      #dept-month-payout-card table.payroll-dept-table th:nth-child(7),#dept-month-payout-card table.payroll-dept-table td:nth-child(7){width:120px;text-align:right;font-weight:600;}
+      #dept-month-payout-card table.payroll-dept-table th:nth-child(8),#dept-month-payout-card table.payroll-dept-table td:nth-child(8){width:95px;text-align:right;}
+      #dept-month-payout-card table.payroll-dept-table th:nth-child(9),#dept-month-payout-card table.payroll-dept-table td:nth-child(9){width:125px;text-align:right;font-weight:700;}
+      #dept-month-payout-card #dept-payout-summary{grid-template-columns:repeat(6,minmax(0,1fr));padding:12px 12px 8px!important;gap:10px;}
+      #dept-month-payout-card #dept-payout-detail-note{display:none!important;}
+      #dept-month-payout-card .dept-mini-card{background:linear-gradient(180deg,#ffffff,#fff8ed);border:1px solid #fed7aa;border-radius:14px;padding:14px 16px;box-shadow:0 8px 20px rgba(15,23,42,.06);position:relative;overflow:hidden;min-height:88px;display:flex;flex-direction:column;justify-content:center;}
+      #dept-month-payout-card .dept-mini-card::before{content:'';position:absolute;left:0;top:0;bottom:0;width:6px;background:linear-gradient(180deg,#fb923c,#f97316);}
+      #dept-month-payout-card .dept-mini-card .k{font-size:10px;text-transform:uppercase;letter-spacing:.8px;color:#9a3412;font-weight:700;margin-bottom:8px;}
+      #dept-month-payout-card .dept-mini-card .v{font-size:22px;font-weight:800;font-family:'DM Mono',monospace;color:#111827;line-height:1.15;}
+      #dept-month-payout-card .dept-mini-card .s{font-size:11px;color:#6b7280;margin-top:6px;}
+      #dept-month-payout-card .dept-mini-card.is-active{background:linear-gradient(180deg,#fff7ed,#ffedd5);border-color:#fb923c;box-shadow:0 12px 26px rgba(249,115,22,.14);}
+      .dept-group-row td{background:#fffbf0!important;border-top:1px solid #fcd34d;border-bottom:1px solid #fde68a;font-weight:700;}
+      .dept-emp-row td:first-child{padding-left:24px!important;}
+      .dept-emp-name{font-weight:600;font-size:11px;line-height:1.2;}
+      .dept-emp-sub{display:block;font-size:9px;color:var(--muted);font-weight:500;margin-top:2px;}
+      .dept-total-row td{background:#f3f4f6!important;font-weight:700;border-bottom:1px solid var(--border);}
+      @media (max-width:1200px){#dept-month-payout-card table.payroll-dept-table{min-width:980px;}#dept-month-payout-card #dept-payout-summary{grid-template-columns:repeat(3,minmax(0,1fr));}}
+      @media (max-width:900px){#dept-month-payout-card #dept-payout-summary{grid-template-columns:repeat(2,minmax(0,1fr));}#pg-deptpayroll .card-hdr .cha{display:grid;grid-template-columns:repeat(2,minmax(140px,1fr));width:100%;}}
+    `;
+    document.head.appendChild(st);
+  }
+  function updateHeader(){
+    const card=document.getElementById('dept-month-payout-card');
+    const h=card?.querySelector('.card-hdr h3');
+    if(h) h.innerHTML='Department-wise Monthly Payout Detail <span style="font-weight:400;color:var(--muted);font-size:11px">(employee-wise net payable + department rent only)</span>';
+    const table=card?.querySelector('table.payroll-dept-table');
+    if(table){
+      const thead=table.querySelector('thead');
+      if(thead) thead.innerHTML='<tr><th>Department / Employee</th><th>Days</th><th>OT Hrs</th><th>Basic Salary ₹</th><th>Salary ₹</th><th>OT ₹</th><th>Net Payable ₹</th><th>Rent ₹</th><th>Total ₹</th></tr>';
+    }
+    const foot=document.getElementById('dept-payout-foot');
+    if(foot && foot.children.length && foot.children[0].colSpan) foot.children[0].colSpan=9;
+    let note=document.getElementById('dept-payout-detail-note');
+    const sum=document.getElementById('dept-payout-summary');
+    if(sum && !note){
+      note=document.createElement('div'); note.id='dept-payout-detail-note'; note.className='dept-note';
+      sum.parentNode.insertBefore(note, sum.nextSibling);
+    }
+    if(note) note.textContent='Old Balance, Extra Allowance, Advance and Food Share are removed from this view. Rent is added once at department total level only.';
+  }
+  function populateRentSelect(month){
+    const sel=document.getElementById('dept-rent-dept'); if(!sel) return;
+    const depts=[...new Set((Array.isArray(EMPS)?EMPS:[]).map(deptOf))].filter(Boolean).sort((a,b)=>a.localeCompare(b));
+    const old=sel.value || depts[0] || '';
+    sel.innerHTML=depts.map(d=>`<option value="${esc(d)}">${esc(d)}</option>`).join('');
+    sel.value=depts.includes(old)?old:(depts[0]||'');
+    const amt=document.getElementById('dept-rent-amount'); if(amt) amt.value=getRent(month, sel.value)||0;
+    sel.onchange=function(){
+      const f=document.getElementById('dept-filter');
+      if(f) f.value=sel.value;
+      const a=document.getElementById('dept-rent-amount');
+      if(a) a.value=getRent(month, sel.value)||0;
+      window.renderDepartmentMonthlyPayout(month);
+    };
+  }
+  function populateDepartmentFilter(){
+    const sel=document.getElementById('dept-filter'); if(!sel) return 'ALL';
+    const depts=[...new Set((Array.isArray(EMPS)?EMPS:[]).map(deptOf))].filter(Boolean).sort((a,b)=>a.localeCompare(b));
+    const old=sel.value || 'ALL';
+    sel.innerHTML=['<option value="ALL">All Departments</option>'].concat(depts.map(d=>`<option value="${esc(d)}">${esc(d)}</option>`)).join('');
+    sel.value=(old==='ALL' || depts.includes(old)) ? old : 'ALL';
+    return sel.value;
+  }
+  function getSelectedDeptFilter(){
+    const sel=document.getElementById('dept-filter');
+    return sel && sel.value ? sel.value : 'ALL';
+  }
+  window.renderDepartmentMonthlyPayout = async function(month){
+    injectCompactStyle(); updateHeader();
+    const mo=month || getMonth();
+    const dm=document.getElementById('dept-pay-month'); const pm=document.getElementById('pay-month');
+    if(dm && dm.value!==mo) dm.value=mo; if(pm && pm.value!==mo) pm.value=mo;
+    await loadRentCloud(mo);
+    populateRentSelect(mo);
+    const selectedFilter=populateDepartmentFilter();
+    const rentSel=document.getElementById('dept-rent-dept');
+    const rentAmt=document.getElementById('dept-rent-amount');
+    if(selectedFilter !== 'ALL' && rentSel){
+      rentSel.value=selectedFilter;
+      if(rentAmt) rentAmt.value=getRent(mo, selectedFilter)||0;
+    }
+    const allGroups=groups(mo);
+    const gs=selectedFilter==='ALL' ? allGroups : allGroups.filter(g=>g.department===selectedFilter);
+    const tbody=document.getElementById('dept-payout-body');
+    const foot=document.getElementById('dept-payout-foot');
+    const sum=document.getElementById('dept-payout-summary');
+    const note=document.getElementById('dept-payout-detail-note');
+    if(!tbody || !foot || !sum) return;
+    const html=[];
+    gs.forEach(g=>{
+      html.push(`<tr class="dept-group-row"><td>🏷 ${esc(g.department)}</td><td class="mono">${g.days}</td><td class="mono">${g.otHrs}</td><td class="mono">${rupee(g.basic)}</td><td class="mono">${rupee(g.salary)}</td><td class="mono ${g.otAmount<0?'cr':'ca'}">${g.otAmount<0?'-':''}${rupee(Math.abs(g.otAmount))}</td><td class="mono">${rupee(g.netPayable)}</td><td class="mono cb">${rupee(g.rent)}</td><td class="mono" style="color:var(--accent)">${rupee(g.total)}</td></tr>`);
+      g.children.forEach(r=>{
+        html.push(`<tr class="dept-emp-row"><td><span class="dept-emp-name">${esc(r.name)}</span><span class="dept-emp-sub">${esc(r.position)}</span></td><td class="mono">${r.days}</td><td class="mono">${Math.round(r.otHrs*100)/100}</td><td class="mono">${rupee(r.basic)}</td><td class="mono">${rupee(r.salary)}</td><td class="mono ${r.otAmount<0?'cr':'ca'}">${r.otAmount<0?'-':''}${rupee(Math.abs(r.otAmount))}</td><td class="mono">${rupee(r.netPayable)}</td><td class="mono cm">—</td><td class="mono">${rupee(r.netPayable)}</td></tr>`);
+      });
+      html.push(`<tr class="dept-total-row"><td>${esc(g.department)} Total (${g.employees} emp)</td><td>${g.days}</td><td>${g.otHrs}</td><td>${rupee(g.basic)}</td><td>${rupee(g.salary)}</td><td>${g.otAmount<0?'-':''}${rupee(Math.abs(g.otAmount))}</td><td>${rupee(g.netPayable)}</td><td>${rupee(g.rent)}</td><td>${rupee(g.total)}</td></tr>`);
+    });
+    tbody.innerHTML=html.join('') || '<tr><td colspan="9" style="text-align:center;padding:20px;color:var(--muted)">No department payout data</td></tr>';
+    const T=gs.reduce((a,g)=>{ ['employees','days','otHrs','basic','salary','otAmount','advance','netPayable','rent','total'].forEach(k=>a[k]+=toNum(g[k])); return a; },{employees:0,days:0,otHrs:0,basic:0,salary:0,otAmount:0,advance:0,netPayable:0,rent:0,total:0});
+    foot.innerHTML=`<td>${selectedFilter==='ALL' ? `Total (${T.employees} employees)` : esc(selectedFilter+' Total')}</td><td>${T.days}</td><td>${Math.round(T.otHrs*100)/100}</td><td>${rupee(T.basic)}</td><td>${rupee(T.salary)}</td><td>${T.otAmount<0?'-':''}${rupee(Math.abs(T.otAmount))}</td><td>${rupee(T.netPayable)}</td><td>${rupee(T.rent)}</td><td>${rupee(T.total)}</td>`;
+    const titleLabel = selectedFilter==='ALL' ? 'All Departments' : selectedFilter;
+    sum.innerHTML=`<div class="dept-mini-card ${selectedFilter!=='ALL'?'is-active':''}"><div class="k">Total Employee Count</div><div class="v">${T.employees}</div><div class="s">${esc(titleLabel)} view</div></div><div class="dept-mini-card"><div class="k">Salary Amount</div><div class="v">${rupee(T.salary)}</div><div class="s">payable salary total</div></div><div class="dept-mini-card"><div class="k">OT Amount</div><div class="v">${T.otAmount<0?'-':''}${rupee(Math.abs(T.otAmount))}</div><div class="s">overtime impact</div></div><div class="dept-mini-card"><div class="k">Rent Amount</div><div class="v">${rupee(T.rent)}</div><div class="s">department rent</div></div><div class="dept-mini-card"><div class="k">Advance Amount</div><div class="v">${rupee(T.advance)}</div><div class="s">employee advances</div></div><div class="dept-mini-card"><div class="k">Total Payable</div><div class="v">${rupee(T.total - T.advance)}</div><div class="s">salary + OT + rent - advance</div></div>`;
+    if(note) note.textContent = '';
+  };
+  window.exportDepartmentPayoutExcel = function(){
+    const mo=getMonth();
+    const selectedFilter=getSelectedDeptFilter();
+    const list=(selectedFilter==='ALL' ? groups(mo) : groups(mo).filter(g=>g.department===selectedFilter));
+    const data=[];
+    list.forEach(g=>{
+      data.push({'Row Type':'DEPARTMENT TOTAL','Department':g.department,'Employee Name':'','Present Days':g.days,'OT Hours':g.otHrs,'Basic Salary':Math.round(g.basic),'Salary Amount':Math.round(g.salary),'OT Amount':Math.round(g.otAmount),'Net Payable':Math.round(g.netPayable),'Department Rent':Math.round(g.rent),'Total Payout':Math.round(g.total),'Bank Account Number':'','IFSC Code':''});
+      g.children.forEach(r=>data.push({'Row Type':'EMPLOYEE','Department':r.dept,'Employee Name':r.name,'Present Days':r.days,'OT Hours':Math.round(r.otHrs*100)/100,'Basic Salary':Math.round(r.basic),'Salary Amount':Math.round(r.salary),'OT Amount':Math.round(r.otAmount),'Net Payable':Math.round(r.netPayable),'Department Rent':'','Total Payout':Math.round(r.netPayable),'Bank Account Number':r.bank,'IFSC Code':r.ifsc}));
+    });
+    if(!window.XLSX){ if(typeof toast==='function') toast('Excel library not loaded. Check internet and refresh.','err'); return; }
+    const ws=XLSX.utils.json_to_sheet(data);
+    ws['!cols']=[{wch:18},{wch:18},{wch:28},{wch:12},{wch:10},{wch:13},{wch:13},{wch:12},{wch:13},{wch:16},{wch:13},{wch:24},{wch:14}];
+    const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Dept Net Payout '+mo);
+    const filePart = selectedFilter==='ALL' ? 'All_Departments' : String(selectedFilter).replace(/\s+/g,'_');
+    XLSX.writeFile(wb, 'Department_Net_Payout_'+filePart+'_'+mo+'.xlsx');
+  };
+  setTimeout(()=>{ try{ window.renderDepartmentMonthlyPayout(); }catch(e){ console.warn('Compact dept payout render skipped:', e.message); } }, 900);
 })();
 </script>
 
