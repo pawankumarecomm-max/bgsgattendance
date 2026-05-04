@@ -4351,5 +4351,2096 @@ boot();
 
 </script>
 
+
+
+<script>
+/* PATCH 2026-05-04: Fix Outstation search + Payroll Old Balance / Extra Allowance net-pay calculation */
+(function(){
+  const html = (s)=>String(s ?? '').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const num2 = (v)=>{ const n=Number(v); return Number.isFinite(n)?n:0; };
+  const monthValue = ()=>{
+    const out=document.getElementById('out-month');
+    const pay=document.getElementById('pay-month');
+    const mo=(out && out.value) || (pay && pay.value) || new Date().toISOString().slice(0,7);
+    if(out && !out.value) out.value=mo;
+    return mo;
+  };
+  const norm = (v)=>String(v||'').toLowerCase().replace(/[()\-_.:,/\\]/g,' ').replace(/\s+/g,' ').trim();
+  const fmtLocal = (v)=> (typeof fmt==='function' ? fmt(v) : Math.round(num2(v)).toLocaleString('en-IN'));
+  const activeEmployees = ()=>{
+    const live = (Array.isArray(window.EMPS) && window.EMPS.length) ? window.EMPS : [];
+    const seed = (!live.length && Array.isArray(window.CURRENT_EMPLOYEE_MASTER)) ? window.CURRENT_EMPLOYEE_MASTER : [];
+    return (live.length ? live : seed).filter(e=>String(e.status||'ACTIVE').toUpperCase()!=='INACTIVE');
+  };
+  function currentMonthlyAttendance(eid, mo){
+    let days=0, ot=0;
+    try{
+      if(typeof daInMo==='function'){
+        daInMo(mo).forEach(([,map])=>{
+          const r=map && map[eid];
+          if(r && String(r.status).toUpperCase()==='P') days++;
+          if(r && String(r.status).toUpperCase()!=='H') ot += num2(r.ot);
+        });
+      }
+    }catch(e){}
+    return {days, ot:Math.round(ot*100)/100};
+  }
+  function ensureOutstationStyle(){
+    if(document.getElementById('outstation-search-fix-style')) return;
+    const st=document.createElement('style');
+    st.id='outstation-search-fix-style';
+    st.textContent=`
+      #pg-outstation .outstation-table thead th{position:sticky;top:0;z-index:5;background:#e5e7eb!important;color:#374151!important;font-weight:800;border-bottom:1px solid #cbd5e1;text-transform:uppercase;letter-spacing:.55px;}
+      #pg-outstation .out-inp{width:92px;padding:5px 8px;font-size:12px;border-radius:7px;}
+      #pg-outstation .out-check{width:16px;height:16px;accent-color:#f97316;}
+      #pg-outstation .out-name{font-weight:600;font-size:12px;}
+      #pg-outstation .out-sub{display:block;color:var(--muted);font-size:10px;margin-top:2px;}
+      #pg-outstation tr.out-selected td{background:#fff7ed!important;}
+      #pg-outstation mark{background:#fef3c7;color:#92400e;border-radius:3px;padding:0 2px;}
+    `;
+    document.head.appendChild(st);
+  }
+  function highlight(text, rawQuery){
+    const value=String(text ?? '');
+    const token=norm(rawQuery).split(' ').filter(Boolean)[0];
+    if(!token || token.length<2) return html(value);
+    const idx=value.toLowerCase().indexOf(token.toLowerCase());
+    if(idx<0) return html(value);
+    return html(value.slice(0,idx))+'<mark>'+html(value.slice(idx,idx+token.length))+'</mark>'+html(value.slice(idx+token.length));
+  }
+
+  window.outstationSearchChanged = function(){
+    if(typeof window.renderOutstationBulk === 'function') window.renderOutstationBulk();
+  };
+
+  window.renderOutstationBulk = function(){
+    ensureOutstationStyle();
+    const tbody=document.getElementById('out-tbody');
+    if(!tbody) return;
+    const mo=monthValue();
+    const searchEl=document.getElementById('out-search');
+    const rawQ=(searchEl?.value || '').trim();
+    const qTokens=norm(rawQ).split(' ').filter(Boolean);
+    const dim = (typeof daysInMonth==='function') ? daysInMonth(mo) : new Date(Number(mo.slice(0,4)), Number(mo.slice(5,7)), 0).getDate();
+    const rows=activeEmployees().filter(e=>{
+      if(!qTokens.length) return true;
+      const hay=norm([e.id,e.name,e.department,e.dept,e.position,e.pos,e.unit,e.unit_name].join(' '));
+      return qTokens.every(t=>hay.includes(t));
+    });
+    if(!rows.length){
+      tbody.innerHTML=`<tr><td colspan="9" style="text-align:center;padding:24px;color:var(--muted)">No employee found${rawQ ? ' for: '+html(rawQ) : ''}</td></tr>`;
+      if(typeof updateOutstationTotals==='function') updateOutstationTotals();
+      return;
+    }
+    tbody.innerHTML=rows.map((e,i)=>{
+      const eid=Number(e.id);
+      const cur=currentMonthlyAttendance(eid, mo);
+      const dept=String(e.department||e.dept||'').trim() || '—';
+      const pos=String(e.position||e.pos||'Employee').trim();
+      const shift=Number(e.shift||8);
+      return `<tr id="out-row-${eid}">
+        <td><input class="out-check" type="checkbox" data-eid="${eid}" onchange="updateOutstationTotals()"></td>
+        <td class="cm">${i+1}</td>
+        <td><span class="out-name">${highlight(e.name||'', rawQ)}</span><span class="out-sub">${html(pos)}</span></td>
+        <td>${highlight(dept, rawQ)}</td>
+        <td><span class="badge b${shift}">${shift}h</span></td>
+        <td class="mono">${cur.days}</td>
+        <td class="mono">${cur.ot}</td>
+        <td><input class="out-inp out-days" data-eid="${eid}" type="number" min="0" max="${dim}" step="1" value="${cur.days||0}" oninput="updateOutstationTotals()"></td>
+        <td><input class="out-inp out-ot" data-eid="${eid}" type="number" step="0.25" value="${cur.ot||0}" oninput="updateOutstationTotals()"></td>
+      </tr>`;
+    }).join('');
+    if(typeof updateOutstationTotals==='function') updateOutstationTotals();
+  };
+
+  window.updateOutstationTotals = function(){
+    let selected=0, days=0, ot=0;
+    document.querySelectorAll('#out-tbody .out-check').forEach(cb=>{
+      const tr=cb.closest('tr');
+      if(tr) tr.classList.toggle('out-selected', !!cb.checked);
+      if(!cb.checked) return;
+      selected++;
+      const eid=cb.dataset.eid;
+      days += num2(document.querySelector(`#out-tbody .out-days[data-eid="${eid}"]`)?.value);
+      ot += num2(document.querySelector(`#out-tbody .out-ot[data-eid="${eid}"]`)?.value);
+    });
+    const s=document.getElementById('out-sel-count'); if(s) s.textContent=selected+' Selected';
+    const d=document.getElementById('out-day-total'); if(d) d.textContent=days+' Days';
+    const o=document.getElementById('out-ot-total'); if(o) o.textContent=Math.round(ot*100)/100+' OT Hrs';
+  };
+
+  window.outstationSelectVisible = function(checked){
+    document.querySelectorAll('#out-tbody .out-check').forEach(cb=>{ cb.checked=!!checked; });
+    updateOutstationTotals();
+  };
+
+  window.initOutstationBulk = function(){
+    const out=document.getElementById('out-month');
+    const pay=document.getElementById('pay-month');
+    if(out && !out.value) out.value=(pay && pay.value) || new Date().toISOString().slice(0,7);
+    ensureOutstationStyle();
+    const search=document.getElementById('out-search');
+    if(search && !search.dataset.searchFixBound){
+      search.dataset.searchFixBound='1';
+      search.addEventListener('input', outstationSearchChanged);
+      search.addEventListener('keyup', outstationSearchChanged);
+      search.addEventListener('search', outstationSearchChanged);
+    }
+    renderOutstationBulk();
+  };
+
+  window.saveOutstationBulkAttendance = async function(){
+    const mo=monthValue();
+    const dim=(typeof daysInMonth==='function') ? daysInMonth(mo) : new Date(Number(mo.slice(0,4)), Number(mo.slice(5,7)), 0).getDate();
+    const selected=[...document.querySelectorAll('#out-tbody .out-check')].filter(cb=>cb.checked);
+    if(!selected.length){ if(typeof toast==='function') toast('Select at least one outstation employee','err'); return; }
+    const source=activeEmployees();
+    const rows=[];
+    selected.forEach(cb=>{
+      const eid=Number(cb.dataset.eid);
+      const emp=source.find(e=>Number(e.id)===eid);
+      if(!emp) return;
+      let presentDays=Math.floor(num2(document.querySelector(`#out-tbody .out-days[data-eid="${eid}"]`)?.value));
+      presentDays=Math.max(0, Math.min(dim, presentDays));
+      const totalOt=num2(document.querySelector(`#out-tbody .out-ot[data-eid="${eid}"]`)?.value);
+      const otBase=presentDays>0 ? Math.floor((totalOt/presentDays)*100)/100 : 0;
+      let remainingOt=Math.round(totalOt*100)/100;
+      for(let day=1; day<=dim; day++){
+        const date=mo+'-'+String(day).padStart(2,'0');
+        if(!ATTS[date]) ATTS[date]={};
+        const isP=day<=presentDays;
+        let ot=0;
+        if(isP){
+          ot = day===presentDays ? Math.round(remainingOt*100)/100 : otBase;
+          remainingOt = Math.round((remainingOt - ot)*100)/100;
+        }
+        const shift=Number(emp.shift||8);
+        const hrs=isP ? Math.max(0, shift + ot) : 0;
+        const auto=isP && typeof computeTimeRange==='function'
+          ? computeTimeRange(hrs, (typeof defaultInTime==='function'?defaultInTime(shift):'09:00'))
+          : {in:'',out:'',hrs:hrs};
+        const rec={
+          status:isP?'P':'A',
+          in_time:isP?auto.in:'',
+          out_time:isP?auto.out:'',
+          hrs:isP?(typeof round2==='function'?round2(auto.hrs||hrs):Math.round((auto.hrs||hrs)*100)/100):0,
+          ot:isP?(typeof round2==='function'?round2(ot):Math.round(ot*100)/100):0
+        };
+        ATTS[date][eid]=rec;
+        rows.push({
+          employee_id:eid,
+          employee_name:emp.name,
+          date,
+          status:rec.status,
+          in_time:rec.in_time,
+          out_time:rec.out_time,
+          total_hours:rec.hrs,
+          ot_hours:rec.ot,
+          unit_name:emp.unit || (window.LIVE_STATE && LIVE_STATE.currentUser && LIVE_STATE.currentUser.unit) || undefined
+        });
+      }
+    });
+    if(!rows.length){ if(typeof toast==='function') toast('No outstation rows to save','err'); return; }
+    if(typeof setPill==='function') setPill('busy','Saving outstation attendance…');
+    try{
+      if(typeof saveLocalCache==='function') saveLocalCache({reason:'outstation-bulk-attendance', backupCurrent:true, backupReason:'before-outstation-bulk'});
+      await gasGet({action:'saveAttendance', rows});
+      if(typeof setPill==='function') setPill('ok','Synced ✓');
+      if(typeof toast==='function') toast('✓ Outstation bulk attendance saved to cloud','ok');
+      renderOutstationBulk();
+      if(typeof renderPayroll==='function') renderPayroll();
+      if(typeof renderDepartmentMonthlyPayout==='function') renderDepartmentMonthlyPayout(mo);
+      if(typeof renderDashboard==='function') renderDashboard();
+    }catch(e){
+      if(typeof setPill==='function') setPill('err','Cloud save failed');
+      if(typeof toast==='function') toast('Outstation attendance was not saved to cloud: '+(e && e.message ? e.message : e),'err');
+    }
+  };
+
+  async function saveAdvanceFull(mo, eid, name, rec, unit){
+    // Save all payroll fields. Fallback still saves advance amount if older schema is missing the new columns.
+    if(typeof assertSupabaseReady==='function' && typeof getSupabase==='function' && typeof sb==='function' && typeof TABLES==='object'){
+      assertSupabaseReady();
+      const clean = (typeof cleanRow==='function') ? cleanRow : (o)=>Object.fromEntries(Object.entries(o).filter(([,v])=>v!==undefined));
+      const row = clean({
+        employee_id: Number(eid),
+        employee_name: String(name||'').trim(),
+        month: String(mo||'').trim(),
+        amount: num2(rec.amount),
+        old_balance: num2(rec.old_balance),
+        extra_allowance: num2(rec.extra_allowance),
+        unit_name: (typeof normalizeUnit==='function') ? normalizeUnit(unit || (window.LIVE_STATE?.currentUser?.unit) || window.DEFAULT_UNIT || 'Jhajjar Unit 1') : (unit || 'Jhajjar Unit 1')
+      });
+      try{
+        await sb(getSupabase().from(TABLES.ADV).upsert([row], {onConflict:'employee_id,month'}), 'Save payroll adjustment');
+        return {ok:true};
+      }catch(err){
+        const msg=String(err && err.message ? err.message : err);
+        if(/old_balance|extra_allowance|schema cache|column/i.test(msg)){
+          const basic = {...row};
+          delete basic.old_balance; delete basic.extra_allowance;
+          await sb(getSupabase().from(TABLES.ADV).upsert([basic], {onConflict:'employee_id,month'}), 'Save advance amount');
+          throw new Error('Advance saved, but Supabase advances table needs old_balance and extra_allowance columns for permanent adjustment saving.');
+        }
+        // If unique constraint is missing, update existing row or insert a new one.
+        const existing = await sb(getSupabase().from(TABLES.ADV).select('id').eq('employee_id', Number(eid)).eq('month', String(mo)).limit(1), 'Find payroll adjustment');
+        if(Array.isArray(existing) && existing.length && existing[0].id !== undefined){
+          await sb(getSupabase().from(TABLES.ADV).update(row).eq('id', existing[0].id), 'Update payroll adjustment');
+        }else{
+          await sb(getSupabase().from(TABLES.ADV).insert([row]), 'Insert payroll adjustment');
+        }
+        return {ok:true};
+      }
+    }
+    return gasGet({action:'saveAdvance', month:mo, employee_id:eid, employee_name:name, amount:num2(rec.amount), old_balance:num2(rec.old_balance), extra_allowance:num2(rec.extra_allowance), unit_name:unit});
+  }
+
+  function currentAdvanceRec(mo, eid){
+    if(!ADVS[mo]) ADVS[mo]={};
+    const base = (typeof normalizeAdvanceRecord==='function') ? normalizeAdvanceRecord(ADVS[mo][eid]) : (ADVS[mo][eid] || {});
+    return {amount:num2(base.amount), old_balance:num2(base.old_balance), extra_allowance:num2(base.extra_allowance)};
+  }
+
+  window.setPayrollAdjustment = async function(mo, eid, name, field, val){
+    if(field!=='old_balance' && field!=='extra_allowance') return;
+    const emp=(Array.isArray(EMPS)?EMPS:[]).find(e=>Number(e.id)===Number(eid));
+    const unit=emp?.unit || window.LIVE_STATE?.currentUser?.unit || window.DEFAULT_UNIT;
+    const prev=currentAdvanceRec(mo, eid);
+    const next={...prev};
+    next[field] = field==='extra_allowance' ? Math.max(0, num2(val)) : num2(val);
+    ADVS[mo][eid]=next;
+    if(typeof saveLocalCache==='function') saveLocalCache({reason:'payroll-adjustment-save', allowSmallerOverwrite:true, backupCurrent:true, backupReason:'before-payroll-adjustment-save'});
+    if(typeof renderPayroll==='function') renderPayroll();
+    if(typeof renderDepartmentMonthlyPayout==='function') renderDepartmentMonthlyPayout(mo);
+    if(typeof setPill==='function') setPill('busy','Saving payroll adjustment…');
+    try{
+      await saveAdvanceFull(mo, eid, name, next, unit);
+      if(typeof setPill==='function') setPill('ok','Synced ✓');
+      if(typeof toast==='function') toast('✓ Payroll adjustment saved and Net Payable updated','ok');
+    }catch(e){
+      if(typeof setPill==='function') setPill('err','Cloud save warning');
+      if(typeof toast==='function') toast(String(e && e.message ? e.message : e),'err');
+    }
+  };
+
+  window.setAdv = async function(mo, eid, name, val){
+    const emp=(Array.isArray(EMPS)?EMPS:[]).find(e=>Number(e.id)===Number(eid));
+    const max=(typeof advanceLimit==='function') ? advanceLimit(emp) : Math.round(num2(emp?.salary)*0.5);
+    let amt=Math.max(0, num2(val));
+    if(amt>max){ amt=max; if(typeof toast==='function') toast('Advance capped at 50% salary for '+name,'err'); }
+    const unit=emp?.unit || window.LIVE_STATE?.currentUser?.unit || window.DEFAULT_UNIT;
+    const prev=currentAdvanceRec(mo, eid);
+    const next={...prev, amount:amt};
+    ADVS[mo][eid]=next;
+    if(typeof saveLocalCache==='function') saveLocalCache({reason:'advance-save-full-record', allowSmallerOverwrite:true, backupCurrent:true, backupReason:'before-advance-save'});
+    if(typeof renderPayroll==='function') renderPayroll();
+    if(typeof renderDepartmentMonthlyPayout==='function') renderDepartmentMonthlyPayout(mo);
+    if(typeof setPill==='function') setPill('busy','Saving advance…');
+    try{
+      await saveAdvanceFull(mo, eid, name, next, unit);
+      if(typeof setPill==='function') setPill('ok','Synced ✓');
+      if(typeof toast==='function') toast('✓ Advance saved to cloud','ok');
+    }catch(e){
+      if(typeof setPill==='function') setPill('err','Cloud save warning');
+      if(typeof toast==='function') toast(String(e && e.message ? e.message : e),'err');
+    }
+  };
+
+  // Refresh active tabs after the patch loads.
+  setTimeout(()=>{
+    try{ if(document.getElementById('pg-outstation')?.classList.contains('active')) initOutstationBulk(); }catch(e){ console.warn(e); }
+    try{ if(document.getElementById('pg-payroll')?.classList.contains('active') && typeof renderPayroll==='function') renderPayroll(); }catch(e){ console.warn(e); }
+  }, 250);
+})();
+</script>
+
+
+<style id="tech-dashboard-patch-style">
+#pg-dashboard #dash-tech-wrap{margin-bottom:16px}
+#pg-dashboard .dash-hero{position:relative;overflow:hidden;background:linear-gradient(135deg,#0f172a 0%,#111827 38%,#1e293b 100%);border:1px solid #1f2937;border-radius:18px;padding:18px 20px 16px;box-shadow:0 12px 30px rgba(2,6,23,.18);color:#fff;margin-bottom:14px}
+#pg-dashboard .dash-hero:before{content:'';position:absolute;right:-80px;top:-80px;width:220px;height:220px;background:radial-gradient(circle,rgba(245,166,35,.26) 0, rgba(245,166,35,0) 68%)}
+#pg-dashboard .dash-hero:after{content:'';position:absolute;left:-60px;bottom:-70px;width:180px;height:180px;background:radial-gradient(circle,rgba(59,130,246,.20) 0, rgba(59,130,246,0) 68%)}
+#pg-dashboard .hero-top{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap;position:relative;z-index:1}
+#pg-dashboard .hero-title{font-size:22px;font-weight:700;letter-spacing:.2px}
+#pg-dashboard .hero-sub{font-size:12px;color:rgba(255,255,255,.72);margin-top:4px}
+#pg-dashboard .hero-pills{display:flex;gap:8px;flex-wrap:wrap;position:relative;z-index:1;margin-top:14px}
+#pg-dashboard .hero-pill{padding:8px 12px;border:1px solid rgba(255,255,255,.12);border-radius:999px;background:rgba(255,255,255,.06);font-size:12px;color:#e5e7eb}
+#pg-dashboard .hero-pill strong{color:#fff;font-weight:700}
+#pg-dashboard .tech-grid-4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:14px}
+#pg-dashboard .tech-grid-3{display:grid;grid-template-columns:1.3fr 1fr 1fr;gap:12px;margin-bottom:14px}
+#pg-dashboard .tech-card{background:linear-gradient(180deg,#ffffff 0%,#fbfdff 100%);border:1px solid #dbe4f0;border-radius:16px;padding:15px 16px;box-shadow:0 8px 22px rgba(15,23,42,.06)}
+#pg-dashboard .tech-card .k{font-size:10px;text-transform:uppercase;letter-spacing:.9px;color:#64748b;margin-bottom:7px;font-weight:700}
+#pg-dashboard .tech-card .v{font-size:24px;font-weight:700;line-height:1.1;color:#0f172a;font-family:'DM Mono',monospace}
+#pg-dashboard .tech-card .s{font-size:11px;color:#64748b;margin-top:6px}
+#pg-dashboard .tech-card .mini-row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #eef2f7;font-size:12px}
+#pg-dashboard .tech-card .mini-row:last-child{border-bottom:none;padding-bottom:0}
+#pg-dashboard .tech-list{display:flex;flex-direction:column;gap:9px}
+#pg-dashboard .tech-item{display:flex;justify-content:space-between;gap:10px;align-items:flex-start;padding:10px 12px;border-radius:12px;background:#f8fafc;border:1px solid #e5edf6}
+#pg-dashboard .tech-item strong{font-size:12px;color:#0f172a}
+#pg-dashboard .tech-item span{font-size:11px;color:#64748b;display:block;margin-top:2px}
+#pg-dashboard .tech-badge{display:inline-flex;align-items:center;gap:6px;padding:5px 9px;border-radius:999px;font-size:11px;font-weight:700}
+#pg-dashboard .tech-good{background:#ecfdf3;color:#15803d;border:1px solid #bbf7d0}
+#pg-dashboard .tech-warn{background:#fffbeb;color:#b45309;border:1px solid #fde68a}
+#pg-dashboard .tech-bad{background:#fef2f2;color:#b91c1c;border:1px solid #fecaca}
+#pg-dashboard .tech-progress{height:9px;border-radius:999px;background:#e5e7eb;overflow:hidden;margin-top:10px}
+#pg-dashboard .tech-progress > div{height:100%;border-radius:999px;background:linear-gradient(90deg,#22c55e,#3b82f6)}
+#pg-dashboard .stat-row{grid-template-columns:repeat(5,1fr)}
+#pg-dashboard .stat-card{border-radius:16px;border:1px solid #dbe4f0;box-shadow:0 8px 22px rgba(15,23,42,.06)}
+#pg-dashboard .s3c{border-radius:16px;border:1px solid #dbe4f0;box-shadow:0 8px 22px rgba(15,23,42,.06)}
+@media (max-width:1200px){#pg-dashboard .tech-grid-4{grid-template-columns:repeat(2,minmax(0,1fr))}#pg-dashboard .tech-grid-3{grid-template-columns:1fr}}
+@media (max-width:760px){#pg-dashboard .tech-grid-4{grid-template-columns:1fr}#pg-dashboard .stat-row{grid-template-columns:repeat(2,1fr)}}
+</style>
+<script id="outstation-search-and-dashboard-enhance-patch">
+(function(){
+  const N=(v)=>{ const n=Number(v); return Number.isFinite(n)?n:0; };
+  const H=(s)=>String(s ?? '').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+  const norm=(v)=>String(v||'').toLowerCase().replace(/[()\-_.:,/\\]/g,' ').replace(/\s+/g,' ').trim();
+
+  function mergedActiveEmployees(){
+    const merged=new Map();
+    const add=(arr)=>{
+      (Array.isArray(arr)?arr:[]).forEach((e,idx)=>{
+        if(!e) return;
+        const status=String(e.status||'ACTIVE').toUpperCase();
+        if(status==='INACTIVE') return;
+        const key=String(e.id ?? ('name:'+norm(e.name)+'|'+norm(e.department||e.dept)+'|'+norm(e.position||e.pos)+'|'+(e.shift||'')));
+        if(!merged.has(key)) merged.set(key,{...e});
+        else{
+          const cur=merged.get(key);
+          merged.set(key,{...e,...cur,id:cur.id ?? e.id});
+        }
+      });
+    };
+    add(window.EMPS);
+    add(window.CURRENT_EMPLOYEE_MASTER);
+    return [...merged.values()].sort((a,b)=>String(a.name||'').localeCompare(String(b.name||'')));
+  }
+
+  function outstationMonthValue(){
+    const out=document.getElementById('out-month');
+    const pay=document.getElementById('pay-month');
+    const mo=(out && out.value) || (pay && pay.value) || new Date().toISOString().slice(0,7);
+    if(out && !out.value) out.value=mo;
+    return mo;
+  }
+
+  function currentMonthlyAttendancePatch(eid, mo){
+    let days=0, ot=0;
+    try{
+      if(typeof window.daInMo==='function'){
+        window.daInMo(mo).forEach(([,map])=>{
+          const r=map && map[eid];
+          if(r && String(r.status||'').toUpperCase()==='P') days++;
+          if(r && String(r.status||'').toUpperCase()!=='H') ot += N(r.ot);
+        });
+      }
+    }catch(e){}
+    return {days, ot:Math.round(ot*100)/100};
+  }
+
+  window.renderOutstationBulk = function(){
+    const tbody=document.getElementById('out-tbody');
+    if(!tbody) return;
+    const mo=outstationMonthValue();
+    const rawQ=String(document.getElementById('out-search')?.value || '').trim();
+    const tokens=norm(rawQ).split(' ').filter(Boolean);
+    const dim=(typeof window.daysInMonth==='function') ? window.daysInMonth(mo) : new Date(Number(mo.slice(0,4)), Number(mo.slice(5,7)), 0).getDate();
+    const allEmployees=mergedActiveEmployees();
+    const rows=allEmployees.filter(e=>{
+      if(!tokens.length) return true;
+      const hay=norm([e.id,e.name,e.department,e.dept,e.position,e.pos,e.unit,e.unit_name].join(' '));
+      return tokens.every(t=>hay.includes(t));
+    });
+    if(!rows.length){
+      tbody.innerHTML=`<tr><td colspan="9" style="text-align:center;padding:24px;color:var(--muted)">No employee found${rawQ ? ' for: '+H(rawQ) : ''}</td></tr>`;
+      if(typeof window.updateOutstationTotals==='function') window.updateOutstationTotals();
+      return;
+    }
+    tbody.innerHTML=rows.map((e,i)=>{
+      const eid=Number(e.id);
+      const cur=currentMonthlyAttendancePatch(eid, mo);
+      const dept=String(e.department||e.dept||'').trim() || '—';
+      const pos=String(e.position||e.pos||'Employee').trim();
+      const shift=Number(e.shift||8);
+      return `<tr id="out-row-${eid}">
+        <td><input class="out-check" type="checkbox" data-eid="${eid}" onchange="updateOutstationTotals()"></td>
+        <td class="cm">${i+1}</td>
+        <td><span class="out-name">${H(e.name||'')}</span><span class="out-sub">${H(pos)}</span></td>
+        <td>${H(dept)}</td>
+        <td><span class="badge b${shift}">${shift}h</span></td>
+        <td class="mono">${cur.days}</td>
+        <td class="mono">${cur.ot}</td>
+        <td><input class="out-inp out-days" data-eid="${eid}" type="number" min="0" max="${dim}" step="1" value="${cur.days||0}" oninput="updateOutstationTotals()"></td>
+        <td><input class="out-inp out-ot" data-eid="${eid}" type="number" step="0.25" value="${cur.ot||0}" oninput="updateOutstationTotals()"></td>
+      </tr>`;
+    }).join('');
+    if(typeof window.updateOutstationTotals==='function') window.updateOutstationTotals();
+  };
+
+  window.initOutstationBulk = function(){
+    const out=document.getElementById('out-month');
+    const pay=document.getElementById('pay-month');
+    if(out && !out.value) out.value=(pay && pay.value) || new Date().toISOString().slice(0,7);
+    const search=document.getElementById('out-search');
+    if(search && !search.dataset.searchFixBoundV2){
+      search.dataset.searchFixBoundV2='1';
+      ['input','keyup','search','change'].forEach(evt=>search.addEventListener(evt, ()=>window.renderOutstationBulk()));
+    }
+    window.renderOutstationBulk();
+  };
+
+  function ensureTechDashboardShell(){
+    const pg=document.getElementById('pg-dashboard');
+    if(!pg || document.getElementById('dash-tech-wrap')) return;
+    const wrap=document.createElement('div');
+    wrap.id='dash-tech-wrap';
+    wrap.innerHTML=`
+      <div class="dash-hero">
+        <div class="hero-top">
+          <div>
+            <div class="hero-title">Operations Command Center</div>
+            <div class="hero-sub">High-level live view of payroll, attendance, overtime and daily operating cost.</div>
+          </div>
+          <div class="tech-badge tech-good" id="dash-tech-sync">● Live dashboard</div>
+        </div>
+        <div class="hero-pills" id="dash-hero-pills"></div>
+      </div>
+      <div class="tech-grid-4" id="dash-tech-kpis"></div>
+      <div class="tech-grid-3">
+        <div class="tech-card">
+          <div class="k">Operational Insights</div>
+          <div class="tech-list" id="dash-tech-insights"></div>
+        </div>
+        <div class="tech-card">
+          <div class="k">Attendance Health</div>
+          <div class="v" id="dash-att-rate">0%</div>
+          <div class="tech-progress"><div id="dash-att-bar" style="width:0%"></div></div>
+          <div class="s" id="dash-att-sub">No data</div>
+          <div style="margin-top:12px" class="mini-row"><span>Present today</span><strong id="dash-att-present">0</strong></div>
+          <div class="mini-row"><span>Absent today</span><strong id="dash-att-absent">0</strong></div>
+          <div class="mini-row"><span>Holiday</span><strong id="dash-att-holiday">0</strong></div>
+        </div>
+        <div class="tech-card">
+          <div class="k">Quick Alerts</div>
+          <div class="tech-list" id="dash-tech-alerts"></div>
+        </div>
+      </div>`;
+    pg.insertBefore(wrap, pg.firstChild);
+  }
+
+  function calcDash(){
+    const td=typeof window.todayS==='function' ? window.todayS() : new Date().toISOString().slice(0,10);
+    const currMo=td.slice(0,7);
+    const emps=Array.isArray(window.EMPS)?window.EMPS:[];
+    const dayAtt=typeof window.da==='function' ? window.da(td) : {};
+    let present=0, absent=0, holiday=0, otHours=0, todaySalary=0, todayOt=0, otEmp=0;
+    emps.forEach(e=>{
+      const r=dayAtt[e.id] || {};
+      const st=String(r.status || 'A').toUpperCase();
+      const rot=N(r.ot);
+      if(st==='P'){ present++; todaySalary += (typeof window.salaryPerDay==='function' ? window.salaryPerDay(e.salary, currMo) : 0); }
+      else if(st==='H') holiday++;
+      else absent++;
+      if(st!=='H') todayOt += (typeof window.otRatePerHour==='function' ? window.otRatePerHour(e.salary, currMo, e.shift) : 0) * rot;
+      if(rot>0) otEmp++;
+      if(st!=='H') otHours += rot;
+    });
+    const todayFood=(typeof window.mealTotalForDate==='function') ? window.mealTotalForDate(td) : 0;
+    let monthSalary=0, monthOt=0;
+    try{
+      if(typeof window.daInMo==='function'){
+        window.daInMo(currMo).forEach(([,map])=>{
+          emps.forEach(e=>{
+            const r=map[e.id];
+            if(r?.status==='P') monthSalary += (typeof window.salaryPerDay==='function' ? window.salaryPerDay(e.salary, currMo) : 0);
+            if(r && String(r.status||'').toUpperCase()!=='H') monthOt += (typeof window.otRatePerHour==='function' ? window.otRatePerHour(e.salary, currMo, e.shift) : 0) * N(r.ot);
+          });
+        });
+      }
+    }catch(e){}
+    const monthFood=(typeof window.mealTotalForMonth==='function') ? window.mealTotalForMonth(currMo) : 0;
+    const monthTotal=monthSalary+monthOt+monthFood;
+    const attendanceRate=emps.length ? Math.round((present/emps.length)*100) : 0;
+    let topDept={department:'—', total:0, present:0};
+    try{
+      if(typeof window.getDepartmentCostData==='function'){
+        const groups=window.getDepartmentCostData(td) || [];
+        groups.sort((a,b)=>(b.total||0)-(a.total||0));
+        if(groups[0]) topDept={department:groups[0].department||'—', total:N(groups[0].total), present:N(groups[0].present)};
+      }
+    }catch(e){}
+    return {td,currMo,emps,present,absent,holiday,otHours,todaySalary,todayOt,todayFood,todayTotal:todaySalary+todayOt+todayFood,monthSalary,monthOt,monthFood,monthTotal,attendanceRate,topDept,otEmp};
+  }
+
+  function renderTechDashboard(){
+    ensureTechDashboardShell();
+    const box=document.getElementById('dash-tech-wrap');
+    if(!box) return;
+    const m=calcDash();
+    const pills=document.getElementById('dash-hero-pills');
+    if(pills) pills.innerHTML=`
+      <div class="hero-pill">Date <strong>${typeof window.fmtD==='function' ? window.fmtD(m.td) : H(m.td)}</strong></div>
+      <div class="hero-pill">Today labour cost <strong>₹${typeof window.fmt==='function' ? window.fmt(m.todayTotal) : Math.round(m.todayTotal).toLocaleString('en-IN')}</strong></div>
+      <div class="hero-pill">Month cost <strong>₹${typeof window.fmt==='function' ? window.fmt(m.monthTotal) : Math.round(m.monthTotal).toLocaleString('en-IN')}</strong></div>
+      <div class="hero-pill">Top cost center <strong>${H(m.topDept.department)}</strong></div>`;
+
+    const kpis=document.getElementById('dash-tech-kpis');
+    if(kpis) kpis.innerHTML=`
+      <div class="tech-card"><div class="k">Attendance % Today</div><div class="v">${m.attendanceRate}%</div><div class="s">${m.present} of ${m.emps.length} staff present</div></div>
+      <div class="tech-card"><div class="k">OT Hours Today</div><div class="v">${Math.round(m.otHours*100)/100}</div><div class="s">${m.otEmp} employees logged overtime</div></div>
+      <div class="tech-card"><div class="k">Today Cost Burn</div><div class="v">₹${typeof window.fmt==='function' ? window.fmt(m.todayTotal) : Math.round(m.todayTotal).toLocaleString('en-IN')}</div><div class="s">Salary + OT + food for today</div></div>
+      <div class="tech-card"><div class="k">Month Food Cost</div><div class="v">₹${typeof window.fmt==='function' ? window.fmt(m.monthFood) : Math.round(m.monthFood).toLocaleString('en-IN')}</div><div class="s">Tea, snacks and dinner spend</div></div>`;
+
+    const attRate=document.getElementById('dash-att-rate'); if(attRate) attRate.textContent=m.attendanceRate+'%';
+    const attBar=document.getElementById('dash-att-bar'); if(attBar) attBar.style.width=Math.max(0,Math.min(100,m.attendanceRate))+'%';
+    const attSub=document.getElementById('dash-att-sub'); if(attSub) attSub.textContent=`Today estimated payroll burn ₹${typeof window.fmt==='function' ? window.fmt(m.todaySalary+m.todayOt) : Math.round(m.todaySalary+m.todayOt).toLocaleString('en-IN')}`;
+    const attP=document.getElementById('dash-att-present'); if(attP) attP.textContent=m.present;
+    const attA=document.getElementById('dash-att-absent'); if(attA) attA.textContent=m.absent;
+    const attH=document.getElementById('dash-att-holiday'); if(attH) attH.textContent=m.holiday;
+
+    const insights=document.getElementById('dash-tech-insights');
+    if(insights) insights.innerHTML=`
+      <div class="tech-item"><div><strong>Salary cost today</strong><span>Daily wage cost for present staff</span></div><div class="mono">₹${typeof window.fmt==='function' ? window.fmt(m.todaySalary) : Math.round(m.todaySalary).toLocaleString('en-IN')}</div></div>
+      <div class="tech-item"><div><strong>OT cost today</strong><span>Overtime cost based on recorded OT hours</span></div><div class="mono">₹${typeof window.fmt==='function' ? window.fmt(m.todayOt) : Math.round(m.todayOt).toLocaleString('en-IN')}</div></div>
+      <div class="tech-item"><div><strong>Top cost center</strong><span>${H(m.topDept.department)} · ${m.topDept.present} present staff</span></div><div class="mono">₹${typeof window.fmt==='function' ? window.fmt(m.topDept.total) : Math.round(m.topDept.total).toLocaleString('en-IN')}</div></div>
+      <div class="tech-item"><div><strong>Month payroll burn</strong><span>Salary + OT accumulated for ${H(m.currMo)}</span></div><div class="mono">₹${typeof window.fmt==='function' ? window.fmt(m.monthSalary+m.monthOt) : Math.round(m.monthSalary+m.monthOt).toLocaleString('en-IN')}</div></div>`;
+
+    const alerts=document.getElementById('dash-tech-alerts');
+    if(alerts){
+      const warn1=m.attendanceRate>=90 ? ['Healthy attendance','Good','tech-good'] : m.attendanceRate>=75 ? ['Attendance needs attention','Watch absent staff','tech-warn'] : ['Low attendance','High absence risk','tech-bad'];
+      const warn2=m.otHours<=8 ? ['OT under control','Balanced load','tech-good'] : m.otHours<=20 ? ['OT rising','Monitor shift load','tech-warn'] : ['High OT load','May increase payout','tech-bad'];
+      const warn3=m.monthFood<=15000 ? ['Food cost normal','Within expected range','tech-good'] : m.monthFood<=30000 ? ['Food cost increasing','Review tea/snacks usage','tech-warn'] : ['Food spend high','Check daily entries','tech-bad'];
+      const pack=(arr,meta)=>`<div class="tech-item"><div><strong>${arr[0]}</strong><span>${arr[1]}</span></div><div class="tech-badge ${arr[2]}">${meta}</div></div>`;
+      alerts.innerHTML=pack(warn1, `${m.attendanceRate}%`) + pack(warn2, `${Math.round(m.otHours*100)/100}h`) + pack(warn3, `₹${typeof window.fmt==='function' ? window.fmt(m.monthFood) : Math.round(m.monthFood).toLocaleString('en-IN')}`);
+    }
+  }
+
+  const oldRenderDashboard=window.renderDashboard;
+  window.renderDashboard=function(){
+    if(typeof oldRenderDashboard==='function') oldRenderDashboard.apply(this, arguments);
+    try{ renderTechDashboard(); }catch(e){ console.warn('Dashboard enhance patch error', e); }
+  };
+
+  setTimeout(()=>{ try{ window.initOutstationBulk(); }catch(e){} try{ renderTechDashboard(); }catch(e){} }, 350);
+})();
+</script>
+
+
+<style id="outstation-select-final-style">
+  #pg-outstation #out-emp-select{
+    min-width:260px;
+    max-width:360px;
+    border-color:#f59e0b;
+    background:#fff;
+  }
+  #pg-outstation .out-fallback-note{
+    font-size:11px;
+    color:#92400e;
+    background:#fffbeb;
+    border:1px solid #fde68a;
+    border-radius:8px;
+    padding:6px 9px;
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+  }
+</style>
+<script id="outstation-select-final-patch">
+(function(){
+  const N = (v)=>{ const n=Number(v); return Number.isFinite(n)?n:0; };
+  const H = (s)=>String(s ?? '').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+  const norm = (v)=>String(v||'').toLowerCase().replace(/[()\-_.,:/\\]/g,' ').replace(/\s+/g,' ').trim();
+
+  function getSeedEmployees(){
+    try{
+      if (typeof CURRENT_EMPLOYEE_MASTER !== 'undefined' && Array.isArray(CURRENT_EMPLOYEE_MASTER)) return CURRENT_EMPLOYEE_MASTER;
+    }catch(e){}
+    try{
+      if (window.CURRENT_EMPLOYEE_MASTER && Array.isArray(window.CURRENT_EMPLOYEE_MASTER)) return window.CURRENT_EMPLOYEE_MASTER;
+    }catch(e){}
+    return [];
+  }
+
+  function activeEmployeesFinal(){
+    const map = new Map();
+    function add(arr, priority){
+      (Array.isArray(arr) ? arr : []).forEach((e,idx)=>{
+        if(!e) return;
+        if(String(e.status || 'ACTIVE').toUpperCase()==='INACTIVE') return;
+        const name = String(e.name || e.employee_name || '').trim();
+        if(!name) return;
+        const key = e.id != null ? 'id:'+String(e.id) : 'name:'+norm([name,e.department,e.dept,e.position,e.pos,e.shift].join(' '));
+        const normalized = {
+          id: e.id != null ? Number(e.id) : (100000 + idx),
+          name,
+          department: e.department || e.dept || '',
+          dept: e.dept || e.department || '',
+          position: e.position || e.pos || '',
+          pos: e.pos || e.position || '',
+          salary: N(e.salary),
+          shift: Number(e.shift || 8),
+          unit: e.unit || e.unit_name || ''
+        };
+        if(!map.has(key)) map.set(key, normalized);
+        else if(priority === 'live') map.set(key, {...map.get(key), ...normalized});
+      });
+    }
+    add(getSeedEmployees(), 'seed');
+    add(window.EMPS, 'live');
+    return [...map.values()].sort((a,b)=>a.name.localeCompare(b.name));
+  }
+
+  function monthVal(){
+    const out=document.getElementById('out-month');
+    const pay=document.getElementById('pay-month');
+    const mo=(out && out.value) || (pay && pay.value) || new Date().toISOString().slice(0,7);
+    if(out && !out.value) out.value=mo;
+    return mo;
+  }
+
+  function curMonthly(eid, mo){
+    let days=0, ot=0;
+    try{
+      if(typeof daInMo==='function'){
+        daInMo(mo).forEach(([,map])=>{
+          const r=map && map[eid];
+          if(r && String(r.status||'').toUpperCase()==='P') days++;
+          if(r && String(r.status||'').toUpperCase()!=='H') ot += N(r.ot);
+        });
+      }
+    }catch(e){}
+    return {days, ot:Math.round(ot*100)/100};
+  }
+
+  function ensureEmployeeSelect(){
+    const search=document.getElementById('out-search');
+    if(!search) return;
+    let select=document.getElementById('out-emp-select');
+    if(!select){
+      select=document.createElement('select');
+      select.id='out-emp-select';
+      select.title='Select employee if search does not find the name';
+      search.insertAdjacentElement('afterend', select);
+
+      const note=document.createElement('span');
+      note.className='out-fallback-note';
+      note.id='out-fallback-note';
+      note.textContent='Use dropdown also';
+      select.insertAdjacentElement('afterend', note);
+
+      select.addEventListener('change', function(){
+        const id=this.value;
+        search.value='';
+        search.dataset.selectedEid=id || '';
+        renderOutstationBulk();
+      });
+    }
+
+    const employees=activeEmployeesFinal();
+    const current=select.value;
+    select.innerHTML='<option value="">All employees / choose employee</option>' + employees.map(e=>{
+      const label=[e.name, e.department || e.dept, e.position || e.pos].filter(Boolean).join(' · ');
+      return `<option value="${H(e.id)}">${H(label)}</option>`;
+    }).join('');
+    if([...select.options].some(o=>o.value===current)) select.value=current;
+
+    const note=document.getElementById('out-fallback-note');
+    if(note) note.textContent = employees.length ? `${employees.length} employees loaded` : 'No employee master loaded';
+  }
+
+  window.outstationSearchChanged = function(){
+    const search=document.getElementById('out-search');
+    const select=document.getElementById('out-emp-select');
+    if(search) search.dataset.selectedEid='';
+    if(select) select.value='';
+    renderOutstationBulk();
+  };
+
+  window.renderOutstationBulk = function(){
+    ensureEmployeeSelect();
+    const tbody=document.getElementById('out-tbody');
+    if(!tbody) return;
+
+    const mo=monthVal();
+    const search=document.getElementById('out-search');
+    const rawQ=String(search?.value || '').trim();
+    const selectedEid=String(search?.dataset.selectedEid || document.getElementById('out-emp-select')?.value || '').trim();
+    const tokens=norm(rawQ).split(' ').filter(Boolean);
+    const dim=(typeof daysInMonth==='function') ? daysInMonth(mo) : new Date(Number(mo.slice(0,4)), Number(mo.slice(5,7)), 0).getDate();
+
+    const all=activeEmployeesFinal();
+    const rows=all.filter(e=>{
+      if(selectedEid) return String(e.id)===selectedEid;
+      if(!tokens.length) return true;
+      const hay=norm([e.id,e.name,e.department,e.dept,e.position,e.pos,e.unit].join(' '));
+      return tokens.every(t=>hay.includes(t));
+    });
+
+    if(!rows.length){
+      const hint = all.length
+        ? `No employee found for: ${H(rawQ || selectedEid)}. Please choose from the dropdown.`
+        : `Employee master is not loaded. Click Sync once, then open Outstation Bulk again.`;
+      tbody.innerHTML=`<tr><td colspan="9" style="text-align:center;padding:24px;color:var(--muted)">${hint}</td></tr>`;
+      if(typeof updateOutstationTotals==='function') updateOutstationTotals();
+      return;
+    }
+
+    tbody.innerHTML=rows.map((e,i)=>{
+      const cur=curMonthly(e.id, mo);
+      const dept=String(e.department||e.dept||'').trim() || '—';
+      const pos=String(e.position||e.pos||'Employee').trim();
+      const shift=Number(e.shift||8);
+      return `<tr id="out-row-${H(e.id)}">
+        <td><input class="out-check" type="checkbox" data-eid="${H(e.id)}" onchange="updateOutstationTotals()"></td>
+        <td class="cm">${i+1}</td>
+        <td><span class="out-name">${H(e.name)}</span><span class="out-sub">${H(pos)}</span></td>
+        <td>${H(dept)}</td>
+        <td><span class="badge b${shift}">${shift}h</span></td>
+        <td class="mono">${cur.days}</td>
+        <td class="mono">${cur.ot}</td>
+        <td><input class="out-inp out-days" data-eid="${H(e.id)}" type="number" min="0" max="${dim}" step="1" value="${cur.days||0}" oninput="updateOutstationTotals()"></td>
+        <td><input class="out-inp out-ot" data-eid="${H(e.id)}" type="number" step="0.25" value="${cur.ot||0}" oninput="updateOutstationTotals()"></td>
+      </tr>`;
+    }).join('');
+
+    if(typeof updateOutstationTotals==='function') updateOutstationTotals();
+  };
+
+  window.initOutstationBulk = function(){
+    const out=document.getElementById('out-month');
+    const pay=document.getElementById('pay-month');
+    if(out && !out.value) out.value=(pay && pay.value) || new Date().toISOString().slice(0,7);
+
+    ensureEmployeeSelect();
+
+    const search=document.getElementById('out-search');
+    if(search && !search.dataset.finalBound){
+      search.dataset.finalBound='1';
+      ['input','keyup','change','search'].forEach(evt=>search.addEventListener(evt, outstationSearchChanged));
+    }
+
+    renderOutstationBulk();
+  };
+
+  // Save function updated to use same merged employee list, so dropdown-selected seed employees also save.
+  const oldSave = window.saveOutstationBulkAttendance;
+  window.saveOutstationBulkAttendance = async function(){
+    const mo=monthVal();
+    const dim=(typeof daysInMonth==='function') ? daysInMonth(mo) : new Date(Number(mo.slice(0,4)), Number(mo.slice(5,7)), 0).getDate();
+    const selected=[...document.querySelectorAll('#out-tbody .out-check')].filter(cb=>cb.checked);
+    if(!selected.length){ if(typeof toast==='function') toast('Select at least one outstation employee','err'); return; }
+
+    const source=activeEmployeesFinal();
+    const rows=[];
+    selected.forEach(cb=>{
+      const eid=Number(cb.dataset.eid);
+      const emp=source.find(e=>Number(e.id)===eid);
+      if(!emp) return;
+
+      let presentDays=Math.floor(N(document.querySelector(`#out-tbody .out-days[data-eid="${eid}"]`)?.value));
+      presentDays=Math.max(0, Math.min(dim, presentDays));
+      const totalOt=N(document.querySelector(`#out-tbody .out-ot[data-eid="${eid}"]`)?.value);
+      const otBase=presentDays>0 ? Math.floor((totalOt/presentDays)*100)/100 : 0;
+      let remainingOt=Math.round(totalOt*100)/100;
+
+      for(let day=1; day<=dim; day++){
+        const date=mo+'-'+String(day).padStart(2,'0');
+        if(!ATTS[date]) ATTS[date]={};
+        const isP=day<=presentDays;
+        let ot=0;
+        if(isP){
+          ot = day===presentDays ? Math.round(remainingOt*100)/100 : otBase;
+          remainingOt = Math.round((remainingOt - ot)*100)/100;
+        }
+        const shift=Number(emp.shift||8);
+        const hrs=isP ? Math.max(0, shift + ot) : 0;
+        const auto=isP && typeof computeTimeRange==='function'
+          ? computeTimeRange(hrs, (typeof defaultInTime==='function'?defaultInTime(shift):'09:00'))
+          : {in:'',out:'',hrs:hrs};
+        const rec={
+          status:isP?'P':'A',
+          in_time:isP?auto.in:'',
+          out_time:isP?auto.out:'',
+          hrs:isP?(typeof round2==='function'?round2(auto.hrs||hrs):Math.round((auto.hrs||hrs)*100)/100):0,
+          ot:isP?(typeof round2==='function'?round2(ot):Math.round(ot*100)/100):0
+        };
+        ATTS[date][eid]=rec;
+        rows.push({
+          employee_id:eid,
+          employee_name:emp.name,
+          date,
+          status:rec.status,
+          in_time:rec.in_time,
+          out_time:rec.out_time,
+          total_hours:rec.hrs,
+          ot_hours:rec.ot,
+          unit_name:emp.unit || (window.LIVE_STATE && LIVE_STATE.currentUser && LIVE_STATE.currentUser.unit) || undefined
+        });
+      }
+    });
+
+    if(!rows.length){ if(typeof toast==='function') toast('No outstation rows to save','err'); return; }
+    if(typeof setPill==='function') setPill('busy','Saving outstation attendance…');
+
+    try{
+      if(typeof saveLocalCache==='function') saveLocalCache({reason:'outstation-bulk-attendance', backupCurrent:true, backupReason:'before-outstation-bulk'});
+      if(window.supa && typeof safeUpsertAttendance==='function'){
+        await safeUpsertAttendance(rows, 'outstation bulk attendance');
+      }else if(window.supa){
+        await supa.from(TABLES.ATT).upsert(rows, {onConflict:'employee_id,date'});
+      }
+      if(typeof setPill==='function') setPill('ok','Synced ✓');
+      if(typeof toast==='function') toast('✓ Outstation attendance saved for '+selected.length+' employee(s)','ok');
+    }catch(e){
+      if(typeof setPill==='function') setPill('err','Cloud save warning');
+      if(typeof toast==='function') toast(String(e && e.message ? e.message : e),'err');
+    }
+
+    try{ renderOutstationBulk(); }catch(e){}
+    try{ if(typeof renderDashboard==='function') renderDashboard(); }catch(e){}
+    try{ if(typeof renderPayroll==='function') renderPayroll(); }catch(e){}
+    try{ if(typeof renderOT==='function') renderOT(); }catch(e){}
+  };
+
+  setTimeout(()=>{ try{ if(document.getElementById('pg-outstation')?.classList.contains('active')) initOutstationBulk(); }catch(e){ console.warn(e); } }, 300);
+})();
+</script>
+
+
+<style id="cmd-center-datewise-style-v4">
+#pg-dashboard .cmd-toolbar{display:flex;gap:10px;align-items:end;flex-wrap:wrap}
+#pg-dashboard .cmd-toolbar .cmd-field{display:flex;flex-direction:column;gap:5px}
+#pg-dashboard .cmd-toolbar .cmd-field label{font-size:10px;text-transform:uppercase;letter-spacing:.7px;color:rgba(255,255,255,.72);margin:0}
+#pg-dashboard .cmd-toolbar input,#pg-dashboard .cmd-toolbar select{min-width:150px;background:rgba(255,255,255,.12);color:#fff;border:1px solid rgba(255,255,255,.14)}
+#pg-dashboard .cmd-toolbar select option{color:#111827;background:#fff}
+#pg-dashboard .cmd-inline-card{margin-bottom:14px}
+#pg-dashboard .dept-track-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+#pg-dashboard .dept-track-item{display:flex;justify-content:space-between;gap:10px;align-items:flex-start;padding:12px 14px;border-radius:14px;background:#f8fafc;border:1px solid #e5edf6}
+#pg-dashboard .dept-track-item .nm{font-size:13px;font-weight:700;color:#0f172a}
+#pg-dashboard .dept-track-item .sb{font-size:11px;color:#64748b;margin-top:3px}
+#pg-dashboard .dept-mets{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+#pg-dashboard .dept-chip{display:inline-flex;align-items:center;gap:4px;padding:5px 8px;border-radius:999px;font-size:11px;font-weight:700;border:1px solid #e5e7eb;background:#fff}
+#pg-dashboard .dept-chip.p{color:#15803d;border-color:#bbf7d0;background:#ecfdf3}
+#pg-dashboard .dept-chip.a{color:#b91c1c;border-color:#fecaca;background:#fef2f2}
+#pg-dashboard .dept-chip.h{color:#475569;border-color:#cbd5e1;background:#f8fafc}
+#pg-dashboard .dept-chip.t{color:#1d4ed8;border-color:#bfdbfe;background:#eff6ff}
+#pg-dashboard .dept-empty{padding:20px;text-align:center;color:#64748b;border:1px dashed #cbd5e1;border-radius:12px;background:#f8fafc}
+@media (max-width:1100px){#pg-dashboard .dept-track-grid{grid-template-columns:1fr}}
+</style>
+<script id="cmd-center-datewise-patch-v4">
+(function(){
+  const N=(v)=>{ const n=Number(v); return Number.isFinite(n)?n:0; };
+  const H=(s)=>String(s ?? '').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+  const fmtMoney=(v)=> typeof window.fmt==='function' ? window.fmt(v) : Math.round(N(v)).toLocaleString('en-IN');
+  const fmtDate=(v)=> typeof window.fmtD==='function' ? window.fmtD(v) : H(v||'');
+  const yestS=()=>{ const d=new Date(); d.setDate(d.getDate()-1); return d.toISOString().slice(0,10); };
+
+  function selectedCmdDate(){
+    const el=document.getElementById('cmd-date');
+    const v=(el && el.value) || yestS();
+    if(el && !el.value) el.value=v;
+    return v;
+  }
+
+  function ensureCmdShell(){
+    const pg=document.getElementById('pg-dashboard');
+    if(!pg) return null;
+    let wrap=document.getElementById('dash-tech-wrap');
+    if(!wrap){
+      wrap=document.createElement('div');
+      wrap.id='dash-tech-wrap';
+      pg.insertBefore(wrap, pg.firstChild);
+    }
+    wrap.innerHTML=`
+      <div class="dash-hero">
+        <div class="hero-top">
+          <div>
+            <div class="hero-title">Operations Command Center</div>
+            <div class="hero-sub">High-level live view of payroll, attendance, overtime and daily operating cost.</div>
+          </div>
+          <div class="cmd-toolbar">
+            <div class="cmd-field">
+              <label>View Date</label>
+              <input type="date" id="cmd-date">
+            </div>
+            <div class="cmd-field">
+              <label>Department View</label>
+              <select id="cmd-dept-filter"><option value="ALL">All Departments</option></select>
+            </div>
+            <button class="btn btn-sm" id="cmd-yday-btn">Yesterday</button>
+            <div class="tech-badge tech-good" id="dash-tech-sync">● Live dashboard</div>
+          </div>
+        </div>
+        <div class="hero-pills" id="dash-hero-pills"></div>
+      </div>
+      <div class="tech-grid-4" id="dash-tech-kpis"></div>
+      <div class="tech-grid-3">
+        <div class="tech-card">
+          <div class="k">Operational Insights</div>
+          <div class="tech-list" id="dash-tech-insights"></div>
+        </div>
+        <div class="tech-card">
+          <div class="k">Attendance Health</div>
+          <div class="v" id="dash-att-rate">0%</div>
+          <div class="tech-progress"><div id="dash-att-bar" style="width:0%"></div></div>
+          <div class="s" id="dash-att-sub">No data</div>
+          <div style="margin-top:12px" class="mini-row"><span>Present</span><strong id="dash-att-present">0</strong></div>
+          <div class="mini-row"><span>Absent</span><strong id="dash-att-absent">0</strong></div>
+          <div class="mini-row"><span>Holiday</span><strong id="dash-att-holiday">0</strong></div>
+        </div>
+        <div class="tech-card">
+          <div class="k">Quick Alerts</div>
+          <div class="tech-list" id="dash-tech-alerts"></div>
+        </div>
+      </div>
+      <div class="tech-card cmd-inline-card">
+        <div class="k" id="dash-dept-head">Department-wise Attendance Tracker</div>
+        <div id="dash-dept-tracker" class="dept-track-grid"></div>
+      </div>`;
+
+    const dateEl=wrap.querySelector('#cmd-date');
+    if(dateEl && !dateEl.dataset.boundV4){
+      dateEl.dataset.boundV4='1';
+      dateEl.value=yestS();
+      dateEl.addEventListener('change', ()=>{
+        const dd=document.getElementById('d-dept-date');
+        if(dd) dd.value=dateEl.value;
+        renderCommandCenterV4();
+      });
+    }
+    const yb=wrap.querySelector('#cmd-yday-btn');
+    if(yb && !yb.dataset.boundV4){
+      yb.dataset.boundV4='1';
+      yb.addEventListener('click', ()=>{
+        const d=yestS();
+        const ce=document.getElementById('cmd-date');
+        if(ce) ce.value=d;
+        const dd=document.getElementById('d-dept-date');
+        if(dd) dd.value=d;
+        renderCommandCenterV4();
+      });
+    }
+    const depSel=wrap.querySelector('#cmd-dept-filter');
+    if(depSel && !depSel.dataset.boundV4){
+      depSel.dataset.boundV4='1';
+      depSel.addEventListener('change', renderCommandCenterV4);
+    }
+    const dd=document.getElementById('d-dept-date');
+    if(dd && !dd.value) dd.value=yestS();
+    return wrap;
+  }
+
+  function calcCommandMetrics(date){
+    const emps=Array.isArray(window.EMPS)?window.EMPS:[];
+    const currMo=date.slice(0,7);
+    const dayAtt=typeof window.da==='function' ? (window.da(date)||{}) : {};
+    let present=0, absent=0, holiday=0, otHours=0, dateSalary=0, dateOt=0;
+    emps.forEach(e=>{
+      const r=dayAtt[e.id]||{};
+      const st=String(r.status||'A').toUpperCase();
+      const rot=N(r.ot);
+      if(st==='P'){
+        present++;
+        if(typeof window.salaryPerDay==='function') dateSalary += window.salaryPerDay(e.salary, currMo);
+      }else if(st==='H') holiday++; else absent++;
+      if(st!=='H'){
+        if(typeof window.otRatePerHour==='function') dateOt += window.otRatePerHour(e.salary, currMo, e.shift)*rot;
+        otHours += rot;
+      }
+    });
+    const dateFood=typeof window.mealTotalForDate==='function' ? window.mealTotalForDate(date) : 0;
+    let monthPayrollBurn=0;
+    try{
+      if(typeof window.daInMo==='function'){
+        window.daInMo(currMo).forEach(([,map])=>{
+          emps.forEach(e=>{
+            const r=map[e.id];
+            if(r?.status==='P' && typeof window.salaryPerDay==='function') monthPayrollBurn += window.salaryPerDay(e.salary,currMo);
+            if(r && String(r.status||'').toUpperCase()!=='H' && typeof window.otRatePerHour==='function') monthPayrollBurn += window.otRatePerHour(e.salary,currMo,e.shift)*N(r.ot);
+          });
+        });
+      }
+    }catch(e){}
+    let deptGroups=[];
+    try{ if(typeof window.getDepartmentCostData==='function') deptGroups=window.getDepartmentCostData(date)||[]; }catch(e){}
+    deptGroups=deptGroups.map(g=>({
+      department:g.department||'—',
+      present:N(g.present), absent:N(g.absent), holiday:N(g.holiday), totalStaff:Array.isArray(g.employees)?g.employees.length:(N(g.present)+N(g.absent)+N(g.holiday)),
+      totalCost:N(g.total), salary:N(g.salary), ot:N(g.ot)
+    })).sort((a,b)=>b.present-a.present || b.totalStaff-a.totalStaff || a.department.localeCompare(b.department));
+    const attendanceRate=emps.length?Math.round((present/emps.length)*100):0;
+    const topDept=[...deptGroups].sort((a,b)=>b.totalCost-a.totalCost)[0] || {department:'—', totalCost:0, present:0};
+    return {date,currMo,emps,present,absent,holiday,otHours,dateSalary,dateOt,dateFood,dateTotal:dateSalary+dateOt+dateFood,monthPayrollBurn,attendanceRate,deptGroups,topDept};
+  }
+
+  window.renderCommandCenterV4 = function(){
+    const wrap=ensureCmdShell();
+    if(!wrap) return;
+    const date=selectedCmdDate();
+    const dd=document.getElementById('d-dept-date');
+    if(dd && dd.value!==date) dd.value=date;
+    const m=calcCommandMetrics(date);
+    const deptSel=document.getElementById('cmd-dept-filter');
+    const deptNames=['ALL', ...m.deptGroups.map(g=>g.department)];
+    const prevDept=(deptSel && deptSel.value) || 'ALL';
+    if(deptSel){
+      deptSel.innerHTML=deptNames.map(dep=>`<option value="${H(dep)}">${H(dep==='ALL'?'All Departments':dep)}</option>`).join('');
+      deptSel.value=deptNames.includes(prevDept)?prevDept:'ALL';
+    }
+    const deptFilter=(deptSel && deptSel.value) || 'ALL';
+    const viewGroups=deptFilter==='ALL' ? m.deptGroups : m.deptGroups.filter(g=>g.department===deptFilter);
+
+    const pills=document.getElementById('dash-hero-pills');
+    if(pills) pills.innerHTML=`
+      <div class="hero-pill">Selected date <strong>${fmtDate(date)}</strong></div>
+      <div class="hero-pill">Date labour cost <strong>₹${fmtMoney(m.dateSalary+m.dateOt)}</strong></div>
+      <div class="hero-pill">Date food cost <strong>₹${fmtMoney(m.dateFood)}</strong></div>
+      <div class="hero-pill">Top cost center <strong>${H(m.topDept.department)}</strong></div>`;
+
+    const kpis=document.getElementById('dash-tech-kpis');
+    if(kpis) kpis.innerHTML=`
+      <div class="tech-card"><div class="k">Attendance % on Selected Date</div><div class="v">${m.attendanceRate}%</div><div class="s">${m.present} of ${m.emps.length} staff present</div></div>
+      <div class="tech-card"><div class="k">OT Hours on Selected Date</div><div class="v">${Math.round(m.otHours*100)/100}</div><div class="s">Overtime logged for ${fmtDate(date)}</div></div>
+      <div class="tech-card"><div class="k">Selected Date Cost Burn</div><div class="v">₹${fmtMoney(m.dateTotal)}</div><div class="s">Salary + OT + food for selected date</div></div>
+      <div class="tech-card"><div class="k">Selected Date Food Cost</div><div class="v">₹${fmtMoney(m.dateFood)}</div><div class="s">Tea, snacks and dinner for ${fmtDate(date)}</div></div>`;
+
+    const attRate=document.getElementById('dash-att-rate'); if(attRate) attRate.textContent=m.attendanceRate+'%';
+    const attBar=document.getElementById('dash-att-bar'); if(attBar) attBar.style.width=Math.max(0,Math.min(100,m.attendanceRate))+'%';
+    const attSub=document.getElementById('dash-att-sub'); if(attSub) attSub.textContent=`Selected date payroll burn ₹${fmtMoney(m.dateSalary+m.dateOt)}`;
+    const attP=document.getElementById('dash-att-present'); if(attP) attP.textContent=m.present;
+    const attA=document.getElementById('dash-att-absent'); if(attA) attA.textContent=m.absent;
+    const attH=document.getElementById('dash-att-holiday'); if(attH) attH.textContent=m.holiday;
+
+    const insights=document.getElementById('dash-tech-insights');
+    if(insights) insights.innerHTML=`
+      <div class="tech-item"><div><strong>Salary cost on selected date</strong><span>Daily wage cost for present staff</span></div><div class="mono">₹${fmtMoney(m.dateSalary)}</div></div>
+      <div class="tech-item"><div><strong>OT cost on selected date</strong><span>Overtime cost based on recorded OT hours</span></div><div class="mono">₹${fmtMoney(m.dateOt)}</div></div>
+      <div class="tech-item"><div><strong>Food cost on selected date</strong><span>Tea + snacks + dinner for ${fmtDate(date)}</span></div><div class="mono">₹${fmtMoney(m.dateFood)}</div></div>
+      <div class="tech-item"><div><strong>Month payroll burn</strong><span>Salary + OT accumulated for ${H(m.currMo)}</span></div><div class="mono">₹${fmtMoney(m.monthPayrollBurn)}</div></div>`;
+
+    const alerts=document.getElementById('dash-tech-alerts');
+    if(alerts){
+      const warn1=m.attendanceRate>=90 ? ['Healthy attendance','Good attendance on selected date','tech-good',`${m.attendanceRate}%`] : m.attendanceRate>=75 ? ['Attendance needs attention','Watch absent staff on selected date','tech-warn',`${m.attendanceRate}%`] : ['Low attendance','High absence risk on selected date','tech-bad',`${m.attendanceRate}%`];
+      const warn2=m.otHours<=8 ? ['OT under control','Balanced load','tech-good',`${Math.round(m.otHours*100)/100}h`] : m.otHours<=20 ? ['OT rising','Monitor shift load','tech-warn',`${Math.round(m.otHours*100)/100}h`] : ['High OT load','May increase payout','tech-bad',`${Math.round(m.otHours*100)/100}h`];
+      const warn3=m.dateFood<=1500 ? ['Food cost normal','Within expected range for selected date','tech-good',`₹${fmtMoney(m.dateFood)}`] : m.dateFood<=4000 ? ['Food cost increasing','Review tea/snacks usage for selected date','tech-warn',`₹${fmtMoney(m.dateFood)}`] : ['Food spend high','Check food entries on selected date','tech-bad',`₹${fmtMoney(m.dateFood)}`];
+      const pack=(arr)=>`<div class="tech-item"><div><strong>${arr[0]}</strong><span>${arr[1]}</span></div><div class="tech-badge ${arr[2]}">${arr[3]}</div></div>`;
+      alerts.innerHTML=pack(warn1)+pack(warn2)+pack(warn3);
+    }
+
+    const deptHead=document.getElementById('dash-dept-head');
+    if(deptHead) deptHead.textContent=`Department-wise Attendance Tracker · ${deptFilter==='ALL'?'All Departments':deptFilter} · ${fmtDate(date)}`;
+    const deptBox=document.getElementById('dash-dept-tracker');
+    if(deptBox){
+      if(!viewGroups.length){
+        deptBox.innerHTML=`<div class="dept-empty">No department attendance available for ${fmtDate(date)}.</div>`;
+      }else{
+        deptBox.innerHTML=viewGroups.map(g=>{
+          const rate=g.totalStaff?Math.round((g.present/g.totalStaff)*100):0;
+          return `<div class="dept-track-item"><div><div class="nm">${H(g.department)}</div><div class="sb">Attendance ${rate}% · Total staff ${g.totalStaff}</div></div><div class="dept-mets"><span class="dept-chip p">P ${g.present}</span><span class="dept-chip a">A ${g.absent}</span><span class="dept-chip h">H ${g.holiday}</span><span class="dept-chip t">Total ${g.totalStaff}</span></div></div>`;
+        }).join('');
+      }
+    }
+  };
+
+  const prevRenderDashboard=window.renderDashboard;
+  window.renderDashboard=function(){
+    if(typeof prevRenderDashboard==='function') prevRenderDashboard.apply(this, arguments);
+    try{ window.renderCommandCenterV4(); }catch(e){ console.warn('Command Center v4 error', e); }
+  };
+
+  setTimeout(()=>{ try{ window.renderCommandCenterV4(); }catch(e){ console.warn(e); } }, 400);
+})();
+</script>
+
+
+<script id="cmd-center-date-picker-final-fix-v5">
+(function(){
+  const N=(v)=>{ const n=Number(v); return Number.isFinite(n)?n:0; };
+  const H=(s)=>String(s ?? '').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+  const fmtMoney=(v)=> typeof window.fmt==='function' ? window.fmt(v) : Math.round(N(v)).toLocaleString('en-IN');
+  const fmtDate=(v)=> typeof window.fmtD==='function' ? window.fmtD(v) : H(v||'');
+  const yesterday=()=>{ const d=new Date(); d.setDate(d.getDate()-1); return d.toISOString().slice(0,10); };
+
+  // Keep selected date in memory so renderDashboard / refresh does not reset it.
+  window.__cmdSelectedDate = window.__cmdSelectedDate || yesterday();
+
+  function buildShellOnce(){
+    const pg=document.getElementById('pg-dashboard');
+    if(!pg) return null;
+
+    let wrap=document.getElementById('dash-tech-wrap');
+    if(!wrap){
+      wrap=document.createElement('div');
+      wrap.id='dash-tech-wrap';
+      pg.insertBefore(wrap, pg.firstChild);
+    }
+
+    // Do NOT rebuild if already exists; rebuilding was the reason date selection was lost.
+    if(!document.getElementById('cmd-date')){
+      wrap.innerHTML=`
+        <div class="dash-hero">
+          <div class="hero-top">
+            <div>
+              <div class="hero-title">Operations Command Center</div>
+              <div class="hero-sub">High-level live view of payroll, attendance, overtime and daily operating cost.</div>
+            </div>
+            <div class="cmd-toolbar">
+              <div class="cmd-field">
+                <label>View Date</label>
+                <input type="date" id="cmd-date">
+              </div>
+              <div class="cmd-field">
+                <label>Department View</label>
+                <select id="cmd-dept-filter"><option value="ALL">All Departments</option></select>
+              </div>
+              <button class="btn btn-sm" id="cmd-yday-btn" type="button">Yesterday</button>
+              <div class="tech-badge tech-good" id="dash-tech-sync">● Live dashboard</div>
+            </div>
+          </div>
+          <div class="hero-pills" id="dash-hero-pills"></div>
+        </div>
+        <div class="tech-grid-4" id="dash-tech-kpis"></div>
+        <div class="tech-grid-3">
+          <div class="tech-card">
+            <div class="k">Operational Insights</div>
+            <div class="tech-list" id="dash-tech-insights"></div>
+          </div>
+          <div class="tech-card">
+            <div class="k">Attendance Health</div>
+            <div class="v" id="dash-att-rate">0%</div>
+            <div class="tech-progress"><div id="dash-att-bar" style="width:0%"></div></div>
+            <div class="s" id="dash-att-sub">No data</div>
+            <div style="margin-top:12px" class="mini-row"><span>Present</span><strong id="dash-att-present">0</strong></div>
+            <div class="mini-row"><span>Absent</span><strong id="dash-att-absent">0</strong></div>
+            <div class="mini-row"><span>Holiday</span><strong id="dash-att-holiday">0</strong></div>
+          </div>
+          <div class="tech-card">
+            <div class="k">Quick Alerts</div>
+            <div class="tech-list" id="dash-tech-alerts"></div>
+          </div>
+        </div>
+        <div class="tech-card cmd-inline-card">
+          <div class="k" id="dash-dept-head">Department-wise Attendance Tracker</div>
+          <div id="dash-dept-tracker" class="dept-track-grid"></div>
+        </div>`;
+    }
+
+    const dateEl=document.getElementById('cmd-date');
+    if(dateEl){
+      dateEl.value = window.__cmdSelectedDate || dateEl.value || yesterday();
+      dateEl.onchange=function(){
+        window.__cmdSelectedDate = this.value || yesterday();
+        const dd=document.getElementById('d-dept-date');
+        if(dd) dd.value = window.__cmdSelectedDate;
+        window.renderCommandCenterV4();
+      };
+      dateEl.oninput=function(){
+        window.__cmdSelectedDate = this.value || window.__cmdSelectedDate || yesterday();
+      };
+    }
+
+    const yb=document.getElementById('cmd-yday-btn');
+    if(yb){
+      yb.onclick=function(){
+        window.__cmdSelectedDate = yesterday();
+        const ce=document.getElementById('cmd-date');
+        if(ce) ce.value = window.__cmdSelectedDate;
+        const dd=document.getElementById('d-dept-date');
+        if(dd) dd.value = window.__cmdSelectedDate;
+        window.renderCommandCenterV4();
+      };
+    }
+
+    const depSel=document.getElementById('cmd-dept-filter');
+    if(depSel){
+      depSel.onchange=function(){ window.renderCommandCenterV4(); };
+    }
+
+    const dd=document.getElementById('d-dept-date');
+    if(dd && !dd.value) dd.value = window.__cmdSelectedDate;
+
+    return wrap;
+  }
+
+  function selectedDate(){
+    const el=document.getElementById('cmd-date');
+    const v=(el && el.value) || window.__cmdSelectedDate || yesterday();
+    window.__cmdSelectedDate = v;
+    if(el && el.value !== v) el.value = v;
+    return v;
+  }
+
+  function metrics(date){
+    const emps=Array.isArray(window.EMPS)?window.EMPS:[];
+    const currMo=date.slice(0,7);
+    const dayAtt=typeof window.da==='function' ? (window.da(date)||{}) : {};
+    let present=0, absent=0, holiday=0, otHours=0, dateSalary=0, dateOt=0;
+
+    emps.forEach(e=>{
+      const r=dayAtt[e.id]||{};
+      const st=String(r.status||'A').toUpperCase();
+      const rot=N(r.ot);
+      if(st==='P'){
+        present++;
+        if(typeof window.salaryPerDay==='function') dateSalary += window.salaryPerDay(e.salary, currMo);
+      }else if(st==='H') holiday++;
+      else absent++;
+
+      if(st!=='H'){
+        otHours += rot;
+        if(typeof window.otRatePerHour==='function') dateOt += window.otRatePerHour(e.salary, currMo, e.shift)*rot;
+      }
+    });
+
+    const dateFood=typeof window.mealTotalForDate==='function' ? window.mealTotalForDate(date) : 0;
+
+    let monthPayrollBurn=0;
+    try{
+      if(typeof window.daInMo==='function'){
+        window.daInMo(currMo).forEach(([,map])=>{
+          emps.forEach(e=>{
+            const r=map[e.id];
+            if(r?.status==='P' && typeof window.salaryPerDay==='function') monthPayrollBurn += window.salaryPerDay(e.salary,currMo);
+            if(r && String(r.status||'').toUpperCase()!=='H' && typeof window.otRatePerHour==='function') monthPayrollBurn += window.otRatePerHour(e.salary,currMo,e.shift)*N(r.ot);
+          });
+        });
+      }
+    }catch(e){}
+
+    let deptGroups=[];
+    try{
+      if(typeof window.getDepartmentCostData==='function') deptGroups=window.getDepartmentCostData(date)||[];
+    }catch(e){}
+
+    deptGroups=deptGroups.map(g=>({
+      department:g.department||'—',
+      present:N(g.present),
+      absent:N(g.absent),
+      holiday:N(g.holiday),
+      totalStaff:Array.isArray(g.employees)?g.employees.length:(N(g.present)+N(g.absent)+N(g.holiday)),
+      totalCost:N(g.total),
+      salary:N(g.salary),
+      ot:N(g.ot)
+    })).sort((a,b)=>b.present-a.present || b.totalStaff-a.totalStaff || String(a.department).localeCompare(String(b.department)));
+
+    const attendanceRate=emps.length?Math.round((present/emps.length)*100):0;
+    const topDept=[...deptGroups].sort((a,b)=>b.totalCost-a.totalCost)[0] || {department:'—', totalCost:0, present:0};
+
+    return {date,currMo,emps,present,absent,holiday,otHours,dateSalary,dateOt,dateFood,dateTotal:dateSalary+dateOt+dateFood,monthPayrollBurn,attendanceRate,deptGroups,topDept};
+  }
+
+  window.renderCommandCenterV4 = function(){
+    buildShellOnce();
+    const date=selectedDate();
+    const dd=document.getElementById('d-dept-date');
+    if(dd && dd.value!==date) dd.value=date;
+
+    const m=metrics(date);
+
+    const deptSel=document.getElementById('cmd-dept-filter');
+    const oldDept=(deptSel && deptSel.value) || 'ALL';
+    const deptNames=['ALL', ...m.deptGroups.map(g=>g.department)];
+    if(deptSel){
+      deptSel.innerHTML=deptNames.map(dep=>`<option value="${H(dep)}">${H(dep==='ALL'?'All Departments':dep)}</option>`).join('');
+      deptSel.value=deptNames.includes(oldDept)?oldDept:'ALL';
+      deptSel.onchange=function(){ window.renderCommandCenterV4(); };
+    }
+    const deptFilter=(deptSel && deptSel.value) || 'ALL';
+    const viewGroups=deptFilter==='ALL' ? m.deptGroups : m.deptGroups.filter(g=>g.department===deptFilter);
+
+    const pills=document.getElementById('dash-hero-pills');
+    if(pills) pills.innerHTML=`
+      <div class="hero-pill">Selected date <strong>${fmtDate(date)}</strong></div>
+      <div class="hero-pill">Date labour cost <strong>₹${fmtMoney(m.dateSalary+m.dateOt)}</strong></div>
+      <div class="hero-pill">Date food cost <strong>₹${fmtMoney(m.dateFood)}</strong></div>
+      <div class="hero-pill">Top cost center <strong>${H(m.topDept.department)}</strong></div>`;
+
+    const kpis=document.getElementById('dash-tech-kpis');
+    if(kpis) kpis.innerHTML=`
+      <div class="tech-card"><div class="k">Attendance % on Selected Date</div><div class="v">${m.attendanceRate}%</div><div class="s">${m.present} of ${m.emps.length} staff present</div></div>
+      <div class="tech-card"><div class="k">OT Hours on Selected Date</div><div class="v">${Math.round(m.otHours*100)/100}</div><div class="s">Overtime logged for ${fmtDate(date)}</div></div>
+      <div class="tech-card"><div class="k">Selected Date Cost Burn</div><div class="v">₹${fmtMoney(m.dateTotal)}</div><div class="s">Salary + OT + food for selected date</div></div>
+      <div class="tech-card"><div class="k">Selected Date Food Cost</div><div class="v">₹${fmtMoney(m.dateFood)}</div><div class="s">Tea, snacks and dinner for ${fmtDate(date)}</div></div>`;
+
+    const attRate=document.getElementById('dash-att-rate'); if(attRate) attRate.textContent=m.attendanceRate+'%';
+    const attBar=document.getElementById('dash-att-bar'); if(attBar) attBar.style.width=Math.max(0,Math.min(100,m.attendanceRate))+'%';
+    const attSub=document.getElementById('dash-att-sub'); if(attSub) attSub.textContent=`Selected date payroll burn ₹${fmtMoney(m.dateSalary+m.dateOt)}`;
+    const attP=document.getElementById('dash-att-present'); if(attP) attP.textContent=m.present;
+    const attA=document.getElementById('dash-att-absent'); if(attA) attA.textContent=m.absent;
+    const attH=document.getElementById('dash-att-holiday'); if(attH) attH.textContent=m.holiday;
+
+    const insights=document.getElementById('dash-tech-insights');
+    if(insights) insights.innerHTML=`
+      <div class="tech-item"><div><strong>Salary cost on selected date</strong><span>Daily wage cost for present staff</span></div><div class="mono">₹${fmtMoney(m.dateSalary)}</div></div>
+      <div class="tech-item"><div><strong>OT cost on selected date</strong><span>Overtime cost based on recorded OT hours</span></div><div class="mono">₹${fmtMoney(m.dateOt)}</div></div>
+      <div class="tech-item"><div><strong>Food cost on selected date</strong><span>Tea + snacks + dinner for ${fmtDate(date)}</span></div><div class="mono">₹${fmtMoney(m.dateFood)}</div></div>
+      <div class="tech-item"><div><strong>Month payroll burn</strong><span>Salary + OT accumulated for ${H(m.currMo)}</span></div><div class="mono">₹${fmtMoney(m.monthPayrollBurn)}</div></div>`;
+
+    const alerts=document.getElementById('dash-tech-alerts');
+    if(alerts){
+      const warn1=m.attendanceRate>=90 ? ['Healthy attendance','Good attendance on selected date','tech-good',`${m.attendanceRate}%`] : m.attendanceRate>=75 ? ['Attendance needs attention','Watch absent staff on selected date','tech-warn',`${m.attendanceRate}%`] : ['Low attendance','High absence risk on selected date','tech-bad',`${m.attendanceRate}%`];
+      const warn2=m.otHours<=8 ? ['OT under control','Balanced load','tech-good',`${Math.round(m.otHours*100)/100}h`] : m.otHours<=20 ? ['OT rising','Monitor shift load','tech-warn',`${Math.round(m.otHours*100)/100}h`] : ['High OT load','May increase payout','tech-bad',`${Math.round(m.otHours*100)/100}h`];
+      const warn3=m.dateFood<=1500 ? ['Food cost normal','Within expected range for selected date','tech-good',`₹${fmtMoney(m.dateFood)}`] : m.dateFood<=4000 ? ['Food cost increasing','Review tea/snacks usage for selected date','tech-warn',`₹${fmtMoney(m.dateFood)}`] : ['Food spend high','Check food entries on selected date','tech-bad',`₹${fmtMoney(m.dateFood)}`];
+      const pack=(arr)=>`<div class="tech-item"><div><strong>${arr[0]}</strong><span>${arr[1]}</span></div><div class="tech-badge ${arr[2]}">${arr[3]}</div></div>`;
+      alerts.innerHTML=pack(warn1)+pack(warn2)+pack(warn3);
+    }
+
+    const deptHead=document.getElementById('dash-dept-head');
+    if(deptHead) deptHead.textContent=`Department-wise Attendance Tracker · ${deptFilter==='ALL'?'All Departments':deptFilter} · ${fmtDate(date)}`;
+
+    const deptBox=document.getElementById('dash-dept-tracker');
+    if(deptBox){
+      if(!viewGroups.length){
+        deptBox.innerHTML=`<div class="dept-empty">No department attendance available for ${fmtDate(date)}.</div>`;
+      }else{
+        deptBox.innerHTML=viewGroups.map(g=>{
+          const rate=g.totalStaff?Math.round((g.present/g.totalStaff)*100):0;
+          return `<div class="dept-track-item"><div><div class="nm">${H(g.department)}</div><div class="sb">Attendance ${rate}% · Total staff ${g.totalStaff}</div></div><div class="dept-mets"><span class="dept-chip p">P ${g.present}</span><span class="dept-chip a">A ${g.absent}</span><span class="dept-chip h">H ${g.holiday}</span><span class="dept-chip t">Total ${g.totalStaff}</span></div></div>`;
+        }).join('');
+      }
+    }
+  };
+
+  // Keep existing renderDashboard wrapper, but make sure final renderer runs.
+  const previousRenderDashboardFinal=window.renderDashboard;
+  window.renderDashboard=function(){
+    if(typeof previousRenderDashboardFinal==='function') previousRenderDashboardFinal.apply(this, arguments);
+    try{ window.renderCommandCenterV4(); }catch(e){ console.warn('Final date picker render error', e); }
+  };
+
+  setTimeout(()=>{ try{ window.renderCommandCenterV4(); }catch(e){ console.warn(e); } }, 500);
+})();
+</script>
+
+
+<script id="cmd-center-employee-data-final-fix-v6">
+(function(){
+  const N=(v)=>{ const n=Number(v); return Number.isFinite(n)?n:0; };
+  const H=(s)=>String(s ?? '').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+  const money=(v)=> typeof fmt==='function' ? fmt(v) : Math.round(N(v)).toLocaleString('en-IN');
+  const fdate=(v)=> typeof fmtD==='function' ? fmtD(v) : H(v||'');
+  const yesterday=()=>{ const d=new Date(); d.setDate(d.getDate()-1); return d.toISOString().slice(0,10); };
+
+  // IMPORTANT FIX:
+  // Original app keeps EMPS as a normal global variable, not always as window.EMPS.
+  // Previous patch was reading only window.EMPS, so it showed "0 of 0 staff".
+  function employees(){
+    try{
+      if(typeof EMPS !== 'undefined' && Array.isArray(EMPS) && EMPS.length) return EMPS;
+    }catch(e){}
+    try{
+      if(window.EMPS && Array.isArray(window.EMPS) && window.EMPS.length) return window.EMPS;
+    }catch(e){}
+    try{
+      if(typeof CURRENT_EMPLOYEE_MASTER !== 'undefined' && Array.isArray(CURRENT_EMPLOYEE_MASTER)) return CURRENT_EMPLOYEE_MASTER;
+    }catch(e){}
+    try{
+      if(window.CURRENT_EMPLOYEE_MASTER && Array.isArray(window.CURRENT_EMPLOYEE_MASTER)) return window.CURRENT_EMPLOYEE_MASTER;
+    }catch(e){}
+    return [];
+  }
+
+  function callDa(date){
+    try{ if(typeof da==='function') return da(date)||{}; }catch(e){}
+    try{ if(typeof window.da==='function') return window.da(date)||{}; }catch(e){}
+    return {};
+  }
+
+  function callDaInMo(mo){
+    try{ if(typeof daInMo==='function') return daInMo(mo)||[]; }catch(e){}
+    try{ if(typeof window.daInMo==='function') return window.daInMo(mo)||[]; }catch(e){}
+    return [];
+  }
+
+  function salaryDay(sal, mo){
+    try{ if(typeof salaryPerDay==='function') return salaryPerDay(sal, mo); }catch(e){}
+    try{ if(typeof window.salaryPerDay==='function') return window.salaryPerDay(sal, mo); }catch(e){}
+    const dim = new Date(Number(mo.slice(0,4)), Number(mo.slice(5,7)), 0).getDate();
+    return N(sal)/dim;
+  }
+
+  function otRate(sal, mo, shift){
+    try{ if(typeof otRatePerHour==='function') return otRatePerHour(sal, mo, shift); }catch(e){}
+    try{ if(typeof window.otRatePerHour==='function') return window.otRatePerHour(sal, mo, shift); }catch(e){}
+    return salaryDay(sal, mo) / Math.max(1, N(shift)||8);
+  }
+
+  function foodForDate(date){
+    try{ if(typeof mealTotalForDate==='function') return mealTotalForDate(date); }catch(e){}
+    try{ if(typeof window.mealTotalForDate==='function') return window.mealTotalForDate(date); }catch(e){}
+    return 0;
+  }
+
+  function selectedDate(){
+    window.__cmdSelectedDate = window.__cmdSelectedDate || yesterday();
+    const el=document.getElementById('cmd-date');
+    if(el && el.value) window.__cmdSelectedDate = el.value;
+    if(el && !el.value) el.value = window.__cmdSelectedDate;
+    return window.__cmdSelectedDate;
+  }
+
+  function ensureDateEvents(){
+    const el=document.getElementById('cmd-date');
+    if(el){
+      if(!el.value) el.value = window.__cmdSelectedDate || yesterday();
+      el.oninput=function(){ window.__cmdSelectedDate=this.value || window.__cmdSelectedDate || yesterday(); };
+      el.onchange=function(){
+        window.__cmdSelectedDate=this.value || yesterday();
+        const deptDate=document.getElementById('d-dept-date');
+        if(deptDate) deptDate.value=window.__cmdSelectedDate;
+        renderCommandCenterV4();
+      };
+    }
+    const yb=document.getElementById('cmd-yday-btn');
+    if(yb){
+      yb.onclick=function(){
+        window.__cmdSelectedDate=yesterday();
+        const ce=document.getElementById('cmd-date'); if(ce) ce.value=window.__cmdSelectedDate;
+        const deptDate=document.getElementById('d-dept-date'); if(deptDate) deptDate.value=window.__cmdSelectedDate;
+        renderCommandCenterV4();
+      };
+    }
+  }
+
+  function groupDepartments(emps, dayAtt, mo){
+    const map=new Map();
+    emps.forEach(e=>{
+      const dep=String(e.department || e.dept || e.unit || 'Unassigned').trim() || 'Unassigned';
+      if(!map.has(dep)) map.set(dep,{department:dep,present:0,absent:0,holiday:0,totalStaff:0,salary:0,ot:0,totalCost:0});
+      const g=map.get(dep);
+      g.totalStaff++;
+      const r=dayAtt[e.id] || {};
+      const st=String(r.status || 'A').toUpperCase();
+      const oth=N(r.ot);
+      if(st==='P'){
+        g.present++;
+        g.salary += salaryDay(e.salary, mo);
+      }else if(st==='H') g.holiday++;
+      else g.absent++;
+      if(st!=='H'){
+        g.ot += otRate(e.salary, mo, e.shift) * oth;
+      }
+      g.totalCost = g.salary + g.ot;
+    });
+    return [...map.values()].sort((a,b)=>b.present-a.present || b.totalStaff-a.totalStaff || a.department.localeCompare(b.department));
+  }
+
+  function metrics(date){
+    const emps=employees();
+    const mo=date.slice(0,7);
+    const dayAtt=callDa(date);
+    let present=0, absent=0, holiday=0, otHours=0, salaryCost=0, otCost=0;
+
+    emps.forEach(e=>{
+      const r=dayAtt[e.id] || {};
+      const st=String(r.status || 'A').toUpperCase();
+      const oth=N(r.ot);
+
+      if(st==='P'){
+        present++;
+        salaryCost += salaryDay(e.salary, mo);
+      }else if(st==='H') holiday++;
+      else absent++;
+
+      if(st!=='H'){
+        otHours += oth;
+        otCost += otRate(e.salary, mo, e.shift) * oth;
+      }
+    });
+
+    const dateFood=foodForDate(date);
+
+    let monthPayroll=0;
+    callDaInMo(mo).forEach(([,map])=>{
+      emps.forEach(e=>{
+        const r=map && map[e.id];
+        if(!r) return;
+        const st=String(r.status || '').toUpperCase();
+        if(st==='P') monthPayroll += salaryDay(e.salary, mo);
+        if(st!=='H') monthPayroll += otRate(e.salary, mo, e.shift)*N(r.ot);
+      });
+    });
+
+    const deptGroups=groupDepartments(emps, dayAtt, mo);
+    const topDept=[...deptGroups].sort((a,b)=>b.totalCost-a.totalCost)[0] || {department:'—',present:0,totalCost:0};
+    const attendanceRate=emps.length ? Math.round((present/emps.length)*100) : 0;
+    return {date,mo,emps,present,absent,holiday,otHours,salaryCost,otCost,dateFood,dateTotal:salaryCost+otCost+dateFood,monthPayroll,deptGroups,topDept,attendanceRate};
+  }
+
+  window.renderCommandCenterV4=function(){
+    ensureDateEvents();
+    const date=selectedDate();
+    const deptDate=document.getElementById('d-dept-date');
+    if(deptDate && deptDate.value!==date) deptDate.value=date;
+
+    const m=metrics(date);
+
+    const deptSel=document.getElementById('cmd-dept-filter');
+    const oldDept=(deptSel && deptSel.value) || 'ALL';
+    const deptNames=['ALL', ...m.deptGroups.map(g=>g.department)];
+    if(deptSel){
+      deptSel.innerHTML=deptNames.map(dep=>`<option value="${H(dep)}">${H(dep==='ALL'?'All Departments':dep)}</option>`).join('');
+      deptSel.value=deptNames.includes(oldDept)?oldDept:'ALL';
+      deptSel.onchange=function(){ renderCommandCenterV4(); };
+    }
+    const deptFilter=(deptSel && deptSel.value) || 'ALL';
+    const viewGroups=deptFilter==='ALL' ? m.deptGroups : m.deptGroups.filter(g=>g.department===deptFilter);
+
+    const pills=document.getElementById('dash-hero-pills');
+    if(pills) pills.innerHTML=`
+      <div class="hero-pill">Selected date <strong>${fdate(date)}</strong></div>
+      <div class="hero-pill">Date labour cost <strong>₹${money(m.salaryCost+m.otCost)}</strong></div>
+      <div class="hero-pill">Date food cost <strong>₹${money(m.dateFood)}</strong></div>
+      <div class="hero-pill">Top cost center <strong>${H(m.topDept.department)}</strong></div>`;
+
+    const kpis=document.getElementById('dash-tech-kpis');
+    if(kpis) kpis.innerHTML=`
+      <div class="tech-card"><div class="k">Attendance % on Selected Date</div><div class="v">${m.attendanceRate}%</div><div class="s">${m.present} of ${m.emps.length} staff present</div></div>
+      <div class="tech-card"><div class="k">OT Hours on Selected Date</div><div class="v">${Math.round(m.otHours*100)/100}</div><div class="s">Overtime logged for ${fdate(date)}</div></div>
+      <div class="tech-card"><div class="k">Selected Date Cost Burn</div><div class="v">₹${money(m.dateTotal)}</div><div class="s">Salary + OT + food for selected date</div></div>
+      <div class="tech-card"><div class="k">Selected Date Food Cost</div><div class="v">₹${money(m.dateFood)}</div><div class="s">Tea, snacks and dinner for ${fdate(date)}</div></div>`;
+
+    const attRate=document.getElementById('dash-att-rate'); if(attRate) attRate.textContent=m.attendanceRate+'%';
+    const attBar=document.getElementById('dash-att-bar'); if(attBar) attBar.style.width=Math.max(0,Math.min(100,m.attendanceRate))+'%';
+    const attSub=document.getElementById('dash-att-sub'); if(attSub) attSub.textContent=`Selected date payroll burn ₹${money(m.salaryCost+m.otCost)}`;
+    const attP=document.getElementById('dash-att-present'); if(attP) attP.textContent=m.present;
+    const attA=document.getElementById('dash-att-absent'); if(attA) attA.textContent=m.absent;
+    const attH=document.getElementById('dash-att-holiday'); if(attH) attH.textContent=m.holiday;
+
+    const insights=document.getElementById('dash-tech-insights');
+    if(insights) insights.innerHTML=`
+      <div class="tech-item"><div><strong>Salary cost on selected date</strong><span>${m.present} present staff × per-day salary</span></div><div class="mono">₹${money(m.salaryCost)}</div></div>
+      <div class="tech-item"><div><strong>OT cost on selected date</strong><span>${Math.round(m.otHours*100)/100} OT hours recorded</span></div><div class="mono">₹${money(m.otCost)}</div></div>
+      <div class="tech-item"><div><strong>Food cost on selected date</strong><span>Tea + snacks + dinner for ${fdate(date)}</span></div><div class="mono">₹${money(m.dateFood)}</div></div>
+      <div class="tech-item"><div><strong>Month payroll burn</strong><span>Salary + OT accumulated for ${H(m.mo)}</span></div><div class="mono">₹${money(m.monthPayroll)}</div></div>`;
+
+    const alerts=document.getElementById('dash-tech-alerts');
+    if(alerts){
+      const a1=m.attendanceRate>=90?['Healthy attendance','Good attendance on selected date','tech-good',`${m.attendanceRate}%`]:m.attendanceRate>=75?['Attendance needs attention','Watch absent staff on selected date','tech-warn',`${m.attendanceRate}%`]:['Low attendance','High absence risk on selected date','tech-bad',`${m.attendanceRate}%`];
+      const a2=m.otHours<=8?['OT under control','Balanced load','tech-good',`${Math.round(m.otHours*100)/100}h`]:m.otHours<=20?['OT rising','Monitor shift load','tech-warn',`${Math.round(m.otHours*100)/100}h`]:['High OT load','May increase payout','tech-bad',`${Math.round(m.otHours*100)/100}h`];
+      const a3=m.dateFood<=1500?['Food cost normal','Within expected range for selected date','tech-good',`₹${money(m.dateFood)}`]:m.dateFood<=4000?['Food cost increasing','Review tea/snacks usage for selected date','tech-warn',`₹${money(m.dateFood)}`]:['Food spend high','Check food entries on selected date','tech-bad',`₹${money(m.dateFood)}`];
+      const pack=(a)=>`<div class="tech-item"><div><strong>${a[0]}</strong><span>${a[1]}</span></div><div class="tech-badge ${a[2]}">${a[3]}</div></div>`;
+      alerts.innerHTML=pack(a1)+pack(a2)+pack(a3);
+    }
+
+    const deptHead=document.getElementById('dash-dept-head');
+    if(deptHead) deptHead.textContent=`Department-wise Attendance Tracker · ${deptFilter==='ALL'?'All Departments':deptFilter} · ${fdate(date)}`;
+
+    const deptBox=document.getElementById('dash-dept-tracker');
+    if(deptBox){
+      if(!viewGroups.length){
+        deptBox.innerHTML=`<div class="dept-empty">No department attendance available for ${fdate(date)}.</div>`;
+      }else{
+        deptBox.innerHTML=viewGroups.map(g=>{
+          const rate=g.totalStaff?Math.round((g.present/g.totalStaff)*100):0;
+          return `<div class="dept-track-item"><div><div class="nm">${H(g.department)}</div><div class="sb">Attendance ${rate}% · Cost ₹${money(g.totalCost)} · Staff ${g.totalStaff}</div></div><div class="dept-mets"><span class="dept-chip p">P ${g.present}</span><span class="dept-chip a">A ${g.absent}</span><span class="dept-chip h">H ${g.holiday}</span><span class="dept-chip t">Total ${g.totalStaff}</span></div></div>`;
+        }).join('');
+      }
+    }
+  };
+
+  // Run after Supabase/local data finishes loading also.
+  const previousRenderDashboardV6=window.renderDashboard;
+  window.renderDashboard=function(){
+    if(typeof previousRenderDashboardV6==='function') previousRenderDashboardV6.apply(this, arguments);
+    try{ renderCommandCenterV4(); }catch(e){ console.warn('Command Center employee data fix error', e); }
+  };
+
+  setTimeout(()=>{ try{ renderCommandCenterV4(); }catch(e){} }, 500);
+  setTimeout(()=>{ try{ renderCommandCenterV4(); }catch(e){} }, 1500);
+  setTimeout(()=>{ try{ renderCommandCenterV4(); }catch(e){} }, 3000);
+})();
+</script>
+
+
+<style id="cmd-date-visible-final-style-v7">
+  #pg-dashboard .cmd-visible-date-bar{
+    display:flex;
+    align-items:end;
+    justify-content:space-between;
+    gap:12px;
+    flex-wrap:wrap;
+    background:#ffffff;
+    border:1px solid #dbe4f0;
+    border-radius:16px;
+    padding:14px 16px;
+    margin:0 0 14px 0;
+    box-shadow:0 8px 22px rgba(15,23,42,.06);
+  }
+  #pg-dashboard .cmd-visible-date-left{
+    display:flex;
+    align-items:end;
+    gap:10px;
+    flex-wrap:wrap;
+  }
+  #pg-dashboard .cmd-visible-date-field label{
+    display:block;
+    font-size:10px;
+    text-transform:uppercase;
+    letter-spacing:.8px;
+    color:#64748b;
+    font-weight:700;
+    margin-bottom:5px;
+  }
+  #pg-dashboard #cmd-visible-date{
+    width:165px;
+    height:38px;
+    border:1px solid #f59e0b;
+    box-shadow:0 0 0 3px rgba(245,158,11,.08);
+    font-weight:600;
+  }
+  #pg-dashboard .cmd-date-note{
+    font-size:12px;
+    color:#64748b;
+  }
+  #pg-dashboard .cmd-date-note strong{
+    color:#0f172a;
+  }
+</style>
+
+<script id="cmd-date-visible-final-fix-v7">
+(function(){
+  const N=(v)=>{ const n=Number(v); return Number.isFinite(n)?n:0; };
+  const H=(s)=>String(s ?? '').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+  const money=(v)=> typeof fmt==='function' ? fmt(v) : Math.round(N(v)).toLocaleString('en-IN');
+  const fdate=(v)=> typeof fmtD==='function' ? fmtD(v) : H(v||'');
+  const yesterday=()=>{ const d=new Date(); d.setDate(d.getDate()-1); return d.toISOString().slice(0,10); };
+
+  // Force first default to yesterday. After user selects a date, keep that date.
+  if(!window.__cmdUserSelectedDate){
+    window.__cmdSelectedDate = yesterday();
+  }
+
+  function employees(){
+    try{ if(typeof EMPS !== 'undefined' && Array.isArray(EMPS) && EMPS.length) return EMPS; }catch(e){}
+    try{ if(window.EMPS && Array.isArray(window.EMPS) && window.EMPS.length) return window.EMPS; }catch(e){}
+    try{ if(typeof CURRENT_EMPLOYEE_MASTER !== 'undefined' && Array.isArray(CURRENT_EMPLOYEE_MASTER)) return CURRENT_EMPLOYEE_MASTER; }catch(e){}
+    try{ if(window.CURRENT_EMPLOYEE_MASTER && Array.isArray(window.CURRENT_EMPLOYEE_MASTER)) return window.CURRENT_EMPLOYEE_MASTER; }catch(e){}
+    return [];
+  }
+  function callDa(date){
+    try{ if(typeof da==='function') return da(date)||{}; }catch(e){}
+    try{ if(typeof window.da==='function') return window.da(date)||{}; }catch(e){}
+    return {};
+  }
+  function callDaInMo(mo){
+    try{ if(typeof daInMo==='function') return daInMo(mo)||[]; }catch(e){}
+    try{ if(typeof window.daInMo==='function') return window.daInMo(mo)||[]; }catch(e){}
+    return [];
+  }
+  function salaryDay(sal, mo){
+    try{ if(typeof salaryPerDay==='function') return salaryPerDay(sal, mo); }catch(e){}
+    try{ if(typeof window.salaryPerDay==='function') return window.salaryPerDay(sal, mo); }catch(e){}
+    const dim=new Date(Number(mo.slice(0,4)), Number(mo.slice(5,7)), 0).getDate();
+    return N(sal)/Math.max(1,dim);
+  }
+  function otRate(sal, mo, shift){
+    try{ if(typeof otRatePerHour==='function') return otRatePerHour(sal, mo, shift); }catch(e){}
+    try{ if(typeof window.otRatePerHour==='function') return window.otRatePerHour(sal, mo, shift); }catch(e){}
+    return salaryDay(sal, mo)/Math.max(1,N(shift)||8);
+  }
+  function foodForDate(date){
+    try{ if(typeof mealTotalForDate==='function') return mealTotalForDate(date); }catch(e){}
+    try{ if(typeof window.mealTotalForDate==='function') return window.mealTotalForDate(date); }catch(e){}
+    return 0;
+  }
+  function selectedDate(){
+    const visible=document.getElementById('cmd-visible-date');
+    const hidden=document.getElementById('cmd-date');
+    const v=(visible && visible.value) || (hidden && hidden.value) || window.__cmdSelectedDate || yesterday();
+    window.__cmdSelectedDate=v;
+    if(visible && visible.value!==v) visible.value=v;
+    if(hidden && hidden.value!==v) hidden.value=v;
+    const deptDate=document.getElementById('d-dept-date');
+    if(deptDate && deptDate.value!==v) deptDate.value=v;
+    return v;
+  }
+
+  function installVisibleDatePicker(){
+    const pg=document.getElementById('pg-dashboard');
+    const wrap=document.getElementById('dash-tech-wrap');
+    if(!pg || !wrap) return;
+
+    let bar=document.getElementById('cmd-visible-date-bar');
+    if(!bar){
+      bar=document.createElement('div');
+      bar.id='cmd-visible-date-bar';
+      bar.className='cmd-visible-date-bar';
+      bar.innerHTML=`
+        <div class="cmd-visible-date-left">
+          <div class="cmd-visible-date-field">
+            <label>View Cost / Attendance Date</label>
+            <input type="date" id="cmd-visible-date">
+          </div>
+          <button class="btn btn-sm" id="cmd-visible-yesterday" type="button">Yesterday</button>
+          <button class="btn btn-p btn-sm" id="cmd-visible-refresh" type="button">Refresh View</button>
+        </div>
+        <div class="cmd-date-note" id="cmd-visible-note">Default view: <strong>Yesterday</strong></div>`;
+      const kpis=document.getElementById('dash-tech-kpis');
+      if(kpis) wrap.insertBefore(bar, kpis);
+      else wrap.appendChild(bar);
+    }
+
+    const input=document.getElementById('cmd-visible-date');
+    if(input){
+      input.value=window.__cmdSelectedDate || yesterday();
+      input.oninput=function(){
+        window.__cmdUserSelectedDate=true;
+        window.__cmdSelectedDate=this.value || yesterday();
+        const hidden=document.getElementById('cmd-date'); if(hidden) hidden.value=window.__cmdSelectedDate;
+        const deptDate=document.getElementById('d-dept-date'); if(deptDate) deptDate.value=window.__cmdSelectedDate;
+      };
+      input.onchange=function(){
+        window.__cmdUserSelectedDate=true;
+        window.__cmdSelectedDate=this.value || yesterday();
+        const hidden=document.getElementById('cmd-date'); if(hidden) hidden.value=window.__cmdSelectedDate;
+        const deptDate=document.getElementById('d-dept-date'); if(deptDate) deptDate.value=window.__cmdSelectedDate;
+        renderCommandCenterV4();
+      };
+    }
+
+    const ybtn=document.getElementById('cmd-visible-yesterday');
+    if(ybtn){
+      ybtn.onclick=function(){
+        window.__cmdUserSelectedDate=true;
+        window.__cmdSelectedDate=yesterday();
+        const input=document.getElementById('cmd-visible-date'); if(input) input.value=window.__cmdSelectedDate;
+        const hidden=document.getElementById('cmd-date'); if(hidden) hidden.value=window.__cmdSelectedDate;
+        const deptDate=document.getElementById('d-dept-date'); if(deptDate) deptDate.value=window.__cmdSelectedDate;
+        renderCommandCenterV4();
+      };
+    }
+
+    const rbtn=document.getElementById('cmd-visible-refresh');
+    if(rbtn){
+      rbtn.onclick=function(){ renderCommandCenterV4(); };
+    }
+
+    const hidden=document.getElementById('cmd-date');
+    if(hidden){
+      hidden.value=window.__cmdSelectedDate || yesterday();
+      hidden.onchange=function(){
+        window.__cmdUserSelectedDate=true;
+        window.__cmdSelectedDate=this.value || yesterday();
+        const input=document.getElementById('cmd-visible-date'); if(input) input.value=window.__cmdSelectedDate;
+        renderCommandCenterV4();
+      };
+    }
+  }
+
+  function groupDepartments(emps, dayAtt, mo){
+    const map=new Map();
+    emps.forEach(e=>{
+      const dep=String(e.department || e.dept || e.unit || 'Unassigned').trim() || 'Unassigned';
+      if(!map.has(dep)) map.set(dep,{department:dep,present:0,absent:0,holiday:0,totalStaff:0,salary:0,ot:0,totalCost:0});
+      const g=map.get(dep);
+      g.totalStaff++;
+      const r=dayAtt[e.id] || {};
+      const st=String(r.status || 'A').toUpperCase();
+      const oth=N(r.ot);
+      if(st==='P'){ g.present++; g.salary += salaryDay(e.salary, mo); }
+      else if(st==='H') g.holiday++;
+      else g.absent++;
+      if(st!=='H') g.ot += otRate(e.salary, mo, e.shift)*oth;
+      g.totalCost=g.salary+g.ot;
+    });
+    return [...map.values()].sort((a,b)=>b.present-a.present || b.totalStaff-a.totalStaff || a.department.localeCompare(b.department));
+  }
+
+  function metrics(date){
+    const emps=employees();
+    const mo=date.slice(0,7);
+    const dayAtt=callDa(date);
+    let present=0, absent=0, holiday=0, otHours=0, salaryCost=0, otCost=0;
+
+    emps.forEach(e=>{
+      const r=dayAtt[e.id] || {};
+      const st=String(r.status || 'A').toUpperCase();
+      const oth=N(r.ot);
+      if(st==='P'){ present++; salaryCost += salaryDay(e.salary, mo); }
+      else if(st==='H') holiday++;
+      else absent++;
+      if(st!=='H'){ otHours += oth; otCost += otRate(e.salary, mo, e.shift)*oth; }
+    });
+
+    const dateFood=foodForDate(date);
+    let monthPayroll=0;
+    callDaInMo(mo).forEach(([,map])=>{
+      emps.forEach(e=>{
+        const r=map && map[e.id];
+        if(!r) return;
+        const st=String(r.status || '').toUpperCase();
+        if(st==='P') monthPayroll += salaryDay(e.salary, mo);
+        if(st!=='H') monthPayroll += otRate(e.salary, mo, e.shift)*N(r.ot);
+      });
+    });
+
+    const deptGroups=groupDepartments(emps, dayAtt, mo);
+    const topDept=[...deptGroups].sort((a,b)=>b.totalCost-a.totalCost)[0] || {department:'—',present:0,totalCost:0};
+    const attendanceRate=emps.length ? Math.round((present/emps.length)*100) : 0;
+    return {date,mo,emps,present,absent,holiday,otHours,salaryCost,otCost,dateFood,dateTotal:salaryCost+otCost+dateFood,monthPayroll,deptGroups,topDept,attendanceRate};
+  }
+
+  window.renderCommandCenterV4=function(){
+    installVisibleDatePicker();
+    const date=selectedDate();
+    const m=metrics(date);
+
+    const deptSel=document.getElementById('cmd-dept-filter');
+    const oldDept=(deptSel && deptSel.value) || 'ALL';
+    const deptNames=['ALL', ...m.deptGroups.map(g=>g.department)];
+    if(deptSel){
+      deptSel.innerHTML=deptNames.map(dep=>`<option value="${H(dep)}">${H(dep==='ALL'?'All Departments':dep)}</option>`).join('');
+      deptSel.value=deptNames.includes(oldDept)?oldDept:'ALL';
+      deptSel.onchange=function(){ renderCommandCenterV4(); };
+    }
+    const deptFilter=(deptSel && deptSel.value) || 'ALL';
+    const viewGroups=deptFilter==='ALL' ? m.deptGroups : m.deptGroups.filter(g=>g.department===deptFilter);
+
+    const note=document.getElementById('cmd-visible-note');
+    if(note) note.innerHTML=`Showing selected date: <strong>${fdate(date)}</strong> · Food cost is date-wise`;
+
+    const pills=document.getElementById('dash-hero-pills');
+    if(pills) pills.innerHTML=`
+      <div class="hero-pill">Selected date <strong>${fdate(date)}</strong></div>
+      <div class="hero-pill">Date labour cost <strong>₹${money(m.salaryCost+m.otCost)}</strong></div>
+      <div class="hero-pill">Date food cost <strong>₹${money(m.dateFood)}</strong></div>
+      <div class="hero-pill">Top cost center <strong>${H(m.topDept.department)}</strong></div>`;
+
+    const kpis=document.getElementById('dash-tech-kpis');
+    if(kpis) kpis.innerHTML=`
+      <div class="tech-card"><div class="k">Attendance % on Selected Date</div><div class="v">${m.attendanceRate}%</div><div class="s">${m.present} of ${m.emps.length} staff present</div></div>
+      <div class="tech-card"><div class="k">OT Hours on Selected Date</div><div class="v">${Math.round(m.otHours*100)/100}</div><div class="s">Overtime logged for ${fdate(date)}</div></div>
+      <div class="tech-card"><div class="k">Selected Date Cost Burn</div><div class="v">₹${money(m.dateTotal)}</div><div class="s">Salary + OT + food for selected date</div></div>
+      <div class="tech-card"><div class="k">Selected Date Food Cost</div><div class="v">₹${money(m.dateFood)}</div><div class="s">Tea, snacks and dinner for ${fdate(date)}</div></div>`;
+
+    const attRate=document.getElementById('dash-att-rate'); if(attRate) attRate.textContent=m.attendanceRate+'%';
+    const attBar=document.getElementById('dash-att-bar'); if(attBar) attBar.style.width=Math.max(0,Math.min(100,m.attendanceRate))+'%';
+    const attSub=document.getElementById('dash-att-sub'); if(attSub) attSub.textContent=`Selected date payroll burn ₹${money(m.salaryCost+m.otCost)}`;
+    const attP=document.getElementById('dash-att-present'); if(attP) attP.textContent=m.present;
+    const attA=document.getElementById('dash-att-absent'); if(attA) attA.textContent=m.absent;
+    const attH=document.getElementById('dash-att-holiday'); if(attH) attH.textContent=m.holiday;
+
+    const insights=document.getElementById('dash-tech-insights');
+    if(insights) insights.innerHTML=`
+      <div class="tech-item"><div><strong>Salary cost on selected date</strong><span>${m.present} present staff × per-day salary</span></div><div class="mono">₹${money(m.salaryCost)}</div></div>
+      <div class="tech-item"><div><strong>OT cost on selected date</strong><span>${Math.round(m.otHours*100)/100} OT hours recorded</span></div><div class="mono">₹${money(m.otCost)}</div></div>
+      <div class="tech-item"><div><strong>Food cost on selected date</strong><span>Tea + snacks + dinner for ${fdate(date)}</span></div><div class="mono">₹${money(m.dateFood)}</div></div>
+      <div class="tech-item"><div><strong>Month payroll burn</strong><span>Salary + OT accumulated for ${H(m.mo)}</span></div><div class="mono">₹${money(m.monthPayroll)}</div></div>`;
+
+    const alerts=document.getElementById('dash-tech-alerts');
+    if(alerts){
+      const a1=m.attendanceRate>=90?['Healthy attendance','Good attendance on selected date','tech-good',`${m.attendanceRate}%`]:m.attendanceRate>=75?['Attendance needs attention','Watch absent staff on selected date','tech-warn',`${m.attendanceRate}%`]:['Low attendance','High absence risk on selected date','tech-bad',`${m.attendanceRate}%`];
+      const a2=m.otHours<=8?['OT under control','Balanced load','tech-good',`${Math.round(m.otHours*100)/100}h`]:m.otHours<=20?['OT rising','Monitor shift load','tech-warn',`${Math.round(m.otHours*100)/100}h`]:['High OT load','May increase payout','tech-bad',`${Math.round(m.otHours*100)/100}h`];
+      const a3=m.dateFood<=1500?['Food cost normal','Within expected range for selected date','tech-good',`₹${money(m.dateFood)}`]:m.dateFood<=4000?['Food cost increasing','Review tea/snacks usage for selected date','tech-warn',`₹${money(m.dateFood)}`]:['Food spend high','Check food entries on selected date','tech-bad',`₹${money(m.dateFood)}`];
+      const pack=(a)=>`<div class="tech-item"><div><strong>${a[0]}</strong><span>${a[1]}</span></div><div class="tech-badge ${a[2]}">${a[3]}</div></div>`;
+      alerts.innerHTML=pack(a1)+pack(a2)+pack(a3);
+    }
+
+    const deptHead=document.getElementById('dash-dept-head');
+    if(deptHead) deptHead.textContent=`Department-wise Attendance Tracker · ${deptFilter==='ALL'?'All Departments':deptFilter} · ${fdate(date)}`;
+
+    const deptBox=document.getElementById('dash-dept-tracker');
+    if(deptBox){
+      if(!viewGroups.length){
+        deptBox.innerHTML=`<div class="dept-empty">No department attendance available for ${fdate(date)}.</div>`;
+      }else{
+        deptBox.innerHTML=viewGroups.map(g=>{
+          const rate=g.totalStaff?Math.round((g.present/g.totalStaff)*100):0;
+          return `<div class="dept-track-item"><div><div class="nm">${H(g.department)}</div><div class="sb">Attendance ${rate}% · Cost ₹${money(g.totalCost)} · Staff ${g.totalStaff}</div></div><div class="dept-mets"><span class="dept-chip p">P ${g.present}</span><span class="dept-chip a">A ${g.absent}</span><span class="dept-chip h">H ${g.holiday}</span><span class="dept-chip t">Total ${g.totalStaff}</span></div></div>`;
+        }).join('');
+      }
+    }
+  };
+
+  const prevDashboardV7=window.renderDashboard;
+  window.renderDashboard=function(){
+    if(typeof prevDashboardV7==='function') prevDashboardV7.apply(this, arguments);
+    try{ renderCommandCenterV4(); }catch(e){ console.warn('v7 date picker final error', e); }
+  };
+
+  setTimeout(()=>{ try{ renderCommandCenterV4(); }catch(e){} }, 300);
+  setTimeout(()=>{ try{ renderCommandCenterV4(); }catch(e){} }, 1200);
+  setTimeout(()=>{ try{ renderCommandCenterV4(); }catch(e){} }, 2500);
+})();
+</script>
+
+
+<style id="cmd-top-right-date-style-v8">
+  /* Hide old white date bar */
+  #pg-dashboard #cmd-visible-date-bar{
+    display:none !important;
+  }
+
+  /* Place date controls inside Operations Command Center header */
+  #pg-dashboard .cmd-top-date-panel{
+    position:relative;
+    z-index:2;
+    display:flex;
+    align-items:end;
+    gap:8px;
+    flex-wrap:wrap;
+    justify-content:flex-end;
+    margin-left:auto;
+  }
+  #pg-dashboard .cmd-top-date-field{
+    display:flex;
+    flex-direction:column;
+    gap:5px;
+    min-width:165px;
+  }
+  #pg-dashboard .cmd-top-date-field label{
+    font-size:9px;
+    text-transform:uppercase;
+    letter-spacing:.85px;
+    color:rgba(255,255,255,.68);
+    font-weight:700;
+    margin:0;
+  }
+  #pg-dashboard #cmd-top-date{
+    height:36px;
+    min-width:165px;
+    background:rgba(255,255,255,.10);
+    border:1px solid rgba(245,166,35,.65);
+    color:#fff;
+    border-radius:10px;
+    padding:7px 10px;
+    font-size:12px;
+    font-weight:700;
+    box-shadow:0 0 0 3px rgba(245,166,35,.08);
+  }
+  #pg-dashboard #cmd-top-date::-webkit-calendar-picker-indicator{
+    filter:invert(1);
+    cursor:pointer;
+  }
+  #pg-dashboard .cmd-top-btn{
+    height:36px;
+    border-radius:10px;
+    padding:0 12px;
+    border:1px solid rgba(255,255,255,.16);
+    background:rgba(255,255,255,.08);
+    color:#fff;
+    font-size:12px;
+    font-weight:700;
+    cursor:pointer;
+    font-family:inherit;
+  }
+  #pg-dashboard .cmd-top-btn:hover{
+    background:rgba(255,255,255,.14);
+  }
+  #pg-dashboard .cmd-top-btn.primary{
+    background:linear-gradient(135deg,#f5a623,#f97316);
+    color:#111827;
+    border-color:transparent;
+  }
+  #pg-dashboard .cmd-top-live{
+    height:36px;
+    display:inline-flex;
+    align-items:center;
+    white-space:nowrap;
+  }
+  #pg-dashboard .dash-hero .hero-top{
+    align-items:flex-start;
+  }
+  @media(max-width:900px){
+    #pg-dashboard .cmd-top-date-panel{
+      width:100%;
+      justify-content:flex-start;
+      margin-top:12px;
+    }
+  }
+</style>
+
+<script id="cmd-top-right-date-fix-v8">
+(function(){
+  const yesterday=()=>{ const d=new Date(); d.setDate(d.getDate()-1); return d.toISOString().slice(0,10); };
+
+  function syncAllDateInputs(value){
+    const v=value || window.__cmdSelectedDate || yesterday();
+    window.__cmdUserSelectedDate=true;
+    window.__cmdSelectedDate=v;
+
+    ['cmd-top-date','cmd-visible-date','cmd-date','d-dept-date'].forEach(id=>{
+      const el=document.getElementById(id);
+      if(el && el.value!==v) el.value=v;
+    });
+    return v;
+  }
+
+  function installTopDatePicker(){
+    const heroTop=document.querySelector('#pg-dashboard .dash-hero .hero-top');
+    if(!heroTop) return;
+
+    // Remove old live badge from header so the right side has clean date controls.
+    const oldLive=document.getElementById('dash-tech-sync');
+    if(oldLive && !oldLive.closest('#cmd-top-date-panel')){
+      oldLive.style.display='none';
+    }
+
+    let panel=document.getElementById('cmd-top-date-panel');
+    if(!panel){
+      panel=document.createElement('div');
+      panel.id='cmd-top-date-panel';
+      panel.className='cmd-top-date-panel';
+      panel.innerHTML=`
+        <div class="cmd-top-date-field">
+          <label>View Date</label>
+          <input type="date" id="cmd-top-date">
+        </div>
+        <button type="button" class="cmd-top-btn" id="cmd-top-yesterday">Yesterday</button>
+        <button type="button" class="cmd-top-btn primary" id="cmd-top-refresh">Refresh</button>
+        <div class="tech-badge tech-good cmd-top-live">● Live dashboard</div>`;
+      heroTop.appendChild(panel);
+    }
+
+    const dateInput=document.getElementById('cmd-top-date');
+    if(dateInput){
+      dateInput.value=window.__cmdSelectedDate || yesterday();
+      dateInput.oninput=function(){
+        syncAllDateInputs(this.value || yesterday());
+      };
+      dateInput.onchange=function(){
+        syncAllDateInputs(this.value || yesterday());
+        if(typeof renderCommandCenterV4==='function') renderCommandCenterV4();
+      };
+    }
+
+    const yBtn=document.getElementById('cmd-top-yesterday');
+    if(yBtn){
+      yBtn.onclick=function(){
+        syncAllDateInputs(yesterday());
+        if(typeof renderCommandCenterV4==='function') renderCommandCenterV4();
+      };
+    }
+
+    const rBtn=document.getElementById('cmd-top-refresh');
+    if(rBtn){
+      rBtn.onclick=function(){
+        syncAllDateInputs(document.getElementById('cmd-top-date')?.value || window.__cmdSelectedDate || yesterday());
+        if(typeof renderCommandCenterV4==='function') renderCommandCenterV4();
+      };
+    }
+
+    syncAllDateInputs(window.__cmdSelectedDate || yesterday());
+  }
+
+  // Wrap final renderer so top date control is always re-added after dashboard rebuild.
+  const prevRenderCommandCenterV8=window.renderCommandCenterV4;
+  window.renderCommandCenterV4=function(){
+    if(typeof prevRenderCommandCenterV8==='function') prevRenderCommandCenterV8.apply(this, arguments);
+    try{ installTopDatePicker(); }catch(e){ console.warn('Top date picker install error', e); }
+  };
+
+  const prevRenderDashboardV8=window.renderDashboard;
+  window.renderDashboard=function(){
+    if(typeof prevRenderDashboardV8==='function') prevRenderDashboardV8.apply(this, arguments);
+    try{ installTopDatePicker(); }catch(e){ console.warn('Top date picker dashboard error', e); }
+  };
+
+  setTimeout(()=>{ try{ installTopDatePicker(); if(typeof renderCommandCenterV4==='function') renderCommandCenterV4(); }catch(e){} }, 300);
+  setTimeout(()=>{ try{ installTopDatePicker(); }catch(e){} }, 1200);
+})();
+</script>
+
 </body>
 </html>
