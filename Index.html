@@ -6442,5 +6442,495 @@ boot();
 })();
 </script>
 
+
+<style id="dashboard-layout-dept-explorer-v9-style">
+  /* Keep main KPI blocks right below Operations Command Center */
+  #pg-dashboard #dash-tech-wrap{margin-bottom:16px;}
+  #pg-dashboard #d-stats{margin-top:2px;}
+  #pg-dashboard #d-s3{margin-top:12px;margin-bottom:16px;}
+
+  /* Remove bottom widgets user no longer wants */
+  #pg-dashboard > .g2{
+    display:none !important;
+  }
+
+  /* Department explorer enhancement */
+  #pg-dashboard .dept-explorer-upgraded{
+    overflow:hidden;
+    border-radius:20px;
+    border:1px solid #d9e2ee;
+    box-shadow:0 14px 32px rgba(15,23,42,.08);
+    background:linear-gradient(180deg,#ffffff 0%,#fbfdff 100%);
+  }
+  #pg-dashboard .dept-explorer-upgraded .card-hdr{
+    padding:14px 18px;
+    background:linear-gradient(180deg,#ffffff 0%,#f9fbff 100%);
+    border-bottom:1px solid #e7edf5;
+  }
+  #pg-dashboard .dept-explorer-upgraded .card-hdr h3{
+    font-size:18px;
+    letter-spacing:-.2px;
+  }
+  #pg-dashboard .dept-explorer-upgraded .cha{
+    gap:10px;
+    flex-wrap:wrap;
+  }
+  #pg-dashboard .dept-explorer-upgraded .dept-list-note{
+    font-size:12px;
+    color:#64748b;
+    font-weight:600;
+  }
+  #pg-dashboard .dept-explorer-upgraded input[type="date"]{
+    border:1px solid #f59e0b !important;
+    box-shadow:0 0 0 3px rgba(245,158,11,.08);
+    font-weight:700;
+  }
+  #pg-dashboard .dept-tab-row{
+    gap:10px;
+    flex-wrap:wrap;
+  }
+  #pg-dashboard .dept-tab{
+    border-radius:999px;
+    border:1px solid #d6dde8;
+    padding:10px 18px;
+    font-weight:700;
+    background:#fff;
+    transition:.18s ease;
+    box-shadow:0 1px 0 rgba(15,23,42,.03);
+  }
+  #pg-dashboard .dept-tab.active{
+    background:linear-gradient(135deg,#f5a623,#f97316);
+    color:#111827;
+    border-color:transparent;
+    box-shadow:0 8px 18px rgba(249,115,22,.20);
+  }
+
+  #pg-dashboard .dept-mini-stats{
+    display:grid;
+    grid-template-columns:repeat(5,minmax(0,1fr));
+    gap:12px;
+    margin-bottom:14px;
+  }
+  #pg-dashboard .dept-mini-card{
+    border-radius:16px;
+    border:1px solid #dbe4f0;
+    background:linear-gradient(180deg,#fff 0%,#fbfdff 100%);
+    box-shadow:0 8px 22px rgba(15,23,42,.05);
+    padding:14px 16px;
+  }
+  #pg-dashboard .dept-mini-card .k{
+    font-size:10px;
+    text-transform:uppercase;
+    letter-spacing:.9px;
+    color:#64748b;
+    font-weight:700;
+    margin-bottom:8px;
+  }
+  #pg-dashboard .dept-mini-card .v{
+    font-size:18px;
+    font-weight:800;
+    color:#0f172a;
+    line-height:1.15;
+  }
+  #pg-dashboard .dept-mini-card .s{
+    margin-top:6px;
+    font-size:12px;
+    color:#64748b;
+  }
+
+  #pg-dashboard .dept-viz-grid{
+    display:grid;
+    grid-template-columns:1.15fr .85fr .85fr;
+    gap:12px;
+    margin-bottom:16px;
+  }
+  #pg-dashboard .dept-viz-card{
+    border-radius:16px;
+    border:1px solid #dbe4f0;
+    background:#fff;
+    padding:14px 16px;
+    box-shadow:0 8px 22px rgba(15,23,42,.05);
+  }
+  #pg-dashboard .dept-viz-title{
+    font-size:10px;
+    text-transform:uppercase;
+    letter-spacing:.85px;
+    color:#64748b;
+    font-weight:700;
+    margin-bottom:10px;
+  }
+  #pg-dashboard .dept-progress-track{
+    height:10px;
+    border-radius:999px;
+    background:#e5e7eb;
+    overflow:hidden;
+    margin:10px 0 8px;
+  }
+  #pg-dashboard .dept-progress-fill{
+    height:100%;
+    border-radius:999px;
+    background:linear-gradient(90deg,#22c55e,#3b82f6);
+  }
+  #pg-dashboard .dept-viz-big{
+    font-size:30px;
+    font-weight:800;
+    color:#0f172a;
+    line-height:1;
+  }
+  #pg-dashboard .dept-viz-sub{
+    font-size:12px;
+    color:#64748b;
+    margin-top:6px;
+  }
+  #pg-dashboard .dept-split-row{
+    display:grid;
+    grid-template-columns:92px 1fr auto;
+    gap:10px;
+    align-items:center;
+    margin-bottom:10px;
+    font-size:12px;
+  }
+  #pg-dashboard .dept-split-row:last-child{margin-bottom:0;}
+  #pg-dashboard .dept-split-bar{
+    height:10px;
+    border-radius:999px;
+    background:#edf2f7;
+    overflow:hidden;
+  }
+  #pg-dashboard .dept-split-bar > div{
+    height:100%;
+    border-radius:999px;
+  }
+  #pg-dashboard .dept-chip-row{
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px;
+  }
+  #pg-dashboard .dept-chip{
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    border-radius:999px;
+    padding:7px 10px;
+    font-size:11px;
+    font-weight:700;
+    border:1px solid #e5e7eb;
+    background:#fff;
+  }
+  #pg-dashboard .dept-chip.p{background:#ecfdf3;border-color:#bbf7d0;color:#15803d;}
+  #pg-dashboard .dept-chip.a{background:#fef2f2;border-color:#fecaca;color:#b91c1c;}
+  #pg-dashboard .dept-chip.h{background:#f8fafc;border-color:#cbd5e1;color:#475569;}
+  #pg-dashboard .dept-chip.o{background:#eff6ff;border-color:#bfdbfe;color:#1d4ed8;}
+  #pg-dashboard .dept-chip.t{background:#fff7ed;border-color:#fed7aa;color:#c2410c;}
+
+  #pg-dashboard #d-dept-list tr:hover td{
+    background:#fffaf2;
+  }
+  #pg-dashboard #d-dept-list .rank-dot{
+    display:inline-flex;
+    width:24px;height:24px;
+    align-items:center;justify-content:center;
+    border-radius:999px;
+    background:#fff7ed;
+    color:#c2410c;
+    font-weight:800;
+    border:1px solid #fed7aa;
+  }
+  #pg-dashboard #d-dept-list .name-sub{
+    display:block;
+    font-size:11px;
+    color:#64748b;
+    margin-top:2px;
+    font-weight:500;
+  }
+  #pg-dashboard .dept-table-caption{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:10px;
+    padding:0 18px 10px;
+    color:#64748b;
+    font-size:12px;
+    font-weight:600;
+  }
+  @media(max-width:1200px){
+    #pg-dashboard .dept-mini-stats{grid-template-columns:repeat(2,minmax(0,1fr));}
+    #pg-dashboard .dept-viz-grid{grid-template-columns:1fr;}
+  }
+  @media(max-width:760px){
+    #pg-dashboard .dept-mini-stats{grid-template-columns:1fr;}
+  }
+</style>
+
+<script id="dashboard-layout-dept-explorer-v9-script">
+(function(){
+  function upgradeDashboardLayoutV9(){
+    const pg=document.getElementById('pg-dashboard');
+    if(!pg) return;
+    const cards=pg.querySelectorAll(':scope > .card');
+    const deptCard=[...cards].find(c => c.querySelector('.card-hdr h3') && c.querySelector('.card-hdr h3').textContent.includes('Department Daily Cost Explorer'));
+    if(deptCard){
+      deptCard.classList.add('dept-explorer-upgraded');
+      let viz=document.getElementById('d-dept-visuals');
+      if(!viz){
+        viz=document.createElement('div');
+        viz.id='d-dept-visuals';
+        viz.className='dept-viz-grid';
+        const summary=document.getElementById('d-dept-summary');
+        if(summary) summary.insertAdjacentElement('afterend', viz);
+      }
+      let caption=document.getElementById('d-dept-table-caption');
+      if(!caption){
+        caption=document.createElement('div');
+        caption.id='d-dept-table-caption';
+        caption.className='dept-table-caption';
+        caption.innerHTML='<span>Present employee cost list</span><span id="d-dept-table-caption-right"></span>';
+        const scroll=deptCard.querySelector('.scrollable');
+        if(scroll) scroll.insertAdjacentElement('beforebegin', caption);
+      }
+    }
+  }
+
+  function safePct(part,total){
+    part=Number(part||0); total=Number(total||0);
+    return total>0 ? Math.round((part/total)*100) : 0;
+  }
+
+  function upgradedDeptRenderV9(forceDept=''){
+    try{ upgradeDashboardLayoutV9(); }catch(e){}
+    const dateEl=document.getElementById('d-dept-date');
+    if(dateEl && !dateEl.value){
+      try{
+        const selected=window.__cmdSelectedDate || (typeof yesterday==='function' ? yesterday() : '');
+        if(selected) dateEl.value=selected;
+      }catch(e){}
+    }
+    const date=(dateEl && dateEl.value) || (window.__cmdSelectedDate || (typeof todayS==='function' ? todayS() : new Date().toISOString().slice(0,10)));
+    const data=(typeof getDepartmentCostData==='function') ? getDepartmentCostData(date) : [];
+    const preferred=(typeof isMdAll==='function' && isMdAll()) ? (Array.isArray(LIVE_UNITS)?LIVE_UNITS:[]) : ['Factory','Mandeep','Logistics'];
+    const found=data.map(g=>g.department);
+    const departments=[...preferred.filter(d=>found.includes(d)),...found.filter(d=>!preferred.includes(d))];
+    if(forceDept) window.DASH_DEPT_SELECTED=forceDept;
+    if(!departments.includes(window.DASH_DEPT_SELECTED)) window.DASH_DEPT_SELECTED=departments[0] || ((typeof isMdAll==='function' && isMdAll()) ? ((Array.isArray(LIVE_UNITS)&&LIVE_UNITS[0])||'') : 'Factory');
+
+    const tabs=document.getElementById('d-dept-tabs');
+    if(tabs){
+      tabs.innerHTML=departments.map(dep=>`<button class="dept-tab ${dep===window.DASH_DEPT_SELECTED?'active':''}" onclick="renderDashboardDeptView('${String(dep).replace(/'/g,"\\'")}')">${dep}</button>`).join('');
+    }
+
+    const active=data.find(g=>g.department===window.DASH_DEPT_SELECTED) || {department:window.DASH_DEPT_SELECTED||'—',employees:[],salary:0,ot:0,total:0,present:0,absent:0,holiday:0};
+    const presentEmployees=(active.employees||[]).filter(e=>e.status==='P').sort((a,b)=>b.totalCost-a.totalCost || String(a.name).localeCompare(String(b.name)));
+    const totalStaff=(active.employees||[]).length;
+    const attendanceRate=safePct(active.present,totalStaff);
+    const salaryShare=Number(active.total||0)!==0 ? Math.max(0,Math.round((Number(active.salary||0)/Math.max(1,Number(active.total||0)))*100)) : (Number(active.salary||0)>0?100:0);
+    const otShare=Number(active.total||0)!==0 ? Math.max(0,Math.round((Number(active.ot||0)/Math.max(1,Number(active.total||0)))*100)) : 0;
+    const otPositiveCount=presentEmployees.filter(e=>Number(e.otHours||0)>0).length;
+    const avgCost=active.present ? Math.round(Number(active.total||0)/active.present) : 0;
+    const title=(typeof isMdAll==='function' && isMdAll()) ? 'Unit' : 'Department';
+
+    const summary=document.getElementById('d-dept-summary');
+    if(summary){
+      summary.innerHTML=`
+        <div class="dept-mini-card"><div class="k">${title}</div><div class="v">${active.department||'—'}</div><div class="s">Date ${typeof fmtD==='function' ? fmtD(date) : date}</div></div>
+        <div class="dept-mini-card"><div class="k">Present Staff</div><div class="v">${active.present||0}</div><div class="s">Total staff ${totalStaff}</div></div>
+        <div class="dept-mini-card"><div class="k">Salary Cost</div><div class="v" style="color:var(--green)">₹${typeof fmt==='function' ? fmt(active.salary||0) : Math.round(active.salary||0).toLocaleString('en-IN')}</div><div class="s">Present salary for date</div></div>
+        <div class="dept-mini-card"><div class="k">OT Cost</div><div class="v" style="color:#d97706">₹${typeof fmt==='function' ? fmt(active.ot||0) : Math.round(active.ot||0).toLocaleString('en-IN')}</div><div class="s">Overtime for date</div></div>
+        <div class="dept-mini-card"><div class="k">Total Cost</div><div class="v" style="color:var(--accent)">₹${typeof fmt==='function' ? fmt(active.total||0) : Math.round(active.total||0).toLocaleString('en-IN')}</div><div class="s">Salary + OT</div></div>`;
+    }
+
+    const viz=document.getElementById('d-dept-visuals');
+    if(viz){
+      viz.innerHTML=`
+        <div class="dept-viz-card">
+          <div class="dept-viz-title">Attendance Performance</div>
+          <div class="dept-viz-big">${attendanceRate}%</div>
+          <div class="dept-progress-track"><div class="dept-progress-fill" style="width:${attendanceRate}%"></div></div>
+          <div class="dept-viz-sub">${active.present||0} present · ${active.absent||0} absent · ${active.holiday||0} holiday · ${totalStaff} total staff</div>
+        </div>
+        <div class="dept-viz-card">
+          <div class="dept-viz-title">Cost Split</div>
+          <div class="dept-split-row">
+            <span>Salary</span>
+            <div class="dept-split-bar"><div style="width:${salaryShare}%;background:linear-gradient(90deg,#22c55e,#16a34a)"></div></div>
+            <strong>₹${typeof fmt==='function' ? fmt(active.salary||0) : Math.round(active.salary||0).toLocaleString('en-IN')}</strong>
+          </div>
+          <div class="dept-split-row">
+            <span>OT</span>
+            <div class="dept-split-bar"><div style="width:${otShare}%;background:linear-gradient(90deg,#f59e0b,#f97316)"></div></div>
+            <strong>₹${typeof fmt==='function' ? fmt(active.ot||0) : Math.round(active.ot||0).toLocaleString('en-IN')}</strong>
+          </div>
+          <div class="dept-viz-sub">Total daily cost ₹${typeof fmt==='function' ? fmt(active.total||0) : Math.round(active.total||0).toLocaleString('en-IN')}</div>
+        </div>
+        <div class="dept-viz-card">
+          <div class="dept-viz-title">Quick Details</div>
+          <div class="dept-chip-row">
+            <span class="dept-chip p">Present ${active.present||0}</span>
+            <span class="dept-chip a">Absent ${active.absent||0}</span>
+            <span class="dept-chip h">Holiday ${active.holiday||0}</span>
+            <span class="dept-chip o">OT Staff ${otPositiveCount}</span>
+            <span class="dept-chip t">Avg / Present ₹${typeof fmt==='function' ? fmt(avgCost||0) : Math.round(avgCost||0).toLocaleString('en-IN')}</span>
+          </div>
+        </div>`;
+    }
+
+    const capRight=document.getElementById('d-dept-table-caption-right');
+    if(capRight){
+      capRight.textContent=`${presentEmployees.length} present employees · ${typeof fmtD==='function' ? fmtD(date) : date}`;
+    }
+
+    const tbody=document.getElementById('d-dept-list');
+    if(tbody){
+      tbody.innerHTML=presentEmployees.length ? presentEmployees.map((e,i)=>`<tr>
+        <td class="cm"><span class="rank-dot">${i+1}</span></td>
+        <td style="font-weight:700">${e.name}${typeof isMdAll==='function' && isMdAll()?`<span class="name-sub">${e.unit||''}</span>`:''}</td>
+        <td class="cm">${e.position||'—'}</td>
+        <td><span class="badge b${e.shift}">${e.shift}h</span></td>
+        <td class="mono">₹${typeof fmt==='function' ? fmt(e.salaryCost||0) : Math.round(e.salaryCost||0).toLocaleString('en-IN')}</td>
+        <td>${e.otHours?`<span class="badge bot">${Number(e.otHours)>0?'+':''}${Number(e.otHours).toFixed(1)}h</span>`:'—'}</td>
+        <td class="mono ca">${e.otCost?`₹${typeof fmt==='function' ? fmt(e.otCost||0) : Math.round(e.otCost||0).toLocaleString('en-IN')}`:'—'}</td>
+        <td class="mono" style="font-weight:800">₹${typeof fmt==='function' ? fmt(e.totalCost||0) : Math.round(e.totalCost||0).toLocaleString('en-IN')}</td>
+      </tr>`).join('') : `<tr><td colspan="8" style="text-align:center;padding:26px;color:var(--muted)">No present employees on ${typeof fmtD==='function' ? fmtD(date) : date}</td></tr>`;
+    }
+  }
+
+  window.renderDashboardDeptView = upgradedDeptRenderV9;
+
+  // Re-apply after dashboard redraws
+  const prevRenderDashboardV9 = window.renderDashboard;
+  window.renderDashboard = function(){
+    if(typeof prevRenderDashboardV9 === 'function') prevRenderDashboardV9.apply(this, arguments);
+    try{ upgradeDashboardLayoutV9(); upgradedDeptRenderV9(); }catch(e){ console.warn('v9 dashboard patch error', e); }
+  };
+
+  setTimeout(()=>{ try{ upgradeDashboardLayoutV9(); upgradedDeptRenderV9(); }catch(e){} }, 350);
+  setTimeout(()=>{ try{ upgradeDashboardLayoutV9(); upgradedDeptRenderV9(); }catch(e){} }, 1200);
+})();
+</script>
+
+
+<style id="cmd-center-inside-stats-v10-style">
+  /* Put old dashboard stat blocks inside Operations Command Center */
+  #pg-dashboard #cmd-inside-blocks{
+    margin-top:14px;
+  }
+  #pg-dashboard #cmd-inside-blocks .stat-row{
+    margin-top:0 !important;
+    margin-bottom:12px !important;
+  }
+  #pg-dashboard #cmd-inside-blocks .s3{
+    margin-top:0 !important;
+    margin-bottom:0 !important;
+  }
+
+  /* Make them feel like part of the Command Center */
+  #pg-dashboard #dash-tech-wrap #d-stats .stat-card,
+  #pg-dashboard #dash-tech-wrap #d-s3 .s3c{
+    border-radius:16px;
+    border:1px solid rgba(255,255,255,.10);
+    background:rgba(255,255,255,.88);
+    box-shadow:0 10px 24px rgba(15,23,42,.08);
+    backdrop-filter:blur(2px);
+  }
+
+  #pg-dashboard #dash-tech-wrap #d-stats .stat-label,
+  #pg-dashboard #dash-tech-wrap #d-s3 .s3l{
+    color:#64748b;
+    font-weight:700;
+    letter-spacing:.6px;
+  }
+
+  #pg-dashboard #dash-tech-wrap #d-stats .stat-val,
+  #pg-dashboard #dash-tech-wrap #d-s3 .s3n{
+    color:#0f172a;
+  }
+
+  #pg-dashboard #dash-tech-wrap #d-s3 .s3i{
+    box-shadow:inset 0 0 0 1px rgba(15,23,42,.06);
+  }
+
+  /* Remove outer spacing now that they live inside command center */
+  #pg-dashboard > #d-stats,
+  #pg-dashboard > #d-s3{
+    margin:0 !important;
+  }
+</style>
+
+<script id="cmd-center-inside-stats-v10-script">
+(function(){
+  function moveStatsInsideCommandCenter(){
+    const wrap = document.getElementById('dash-tech-wrap');
+    const stats = document.getElementById('d-stats');
+    const s3 = document.getElementById('d-s3');
+    if(!wrap || !stats || !s3) return;
+
+    let host = document.getElementById('cmd-inside-blocks');
+    if(!host){
+      host = document.createElement('div');
+      host.id = 'cmd-inside-blocks';
+
+      // Put them below the command-center custom KPIs
+      const deptCard = document.querySelector('#pg-dashboard .dept-explorer-upgraded') || document.querySelector('#pg-dashboard > .card');
+      if(deptCard){
+        deptCard.insertAdjacentElement('beforebegin', host);
+      }else{
+        wrap.insertAdjacentElement('afterend', host);
+      }
+    }
+
+    // Move the original live-rendered nodes, don't clone.
+    if(stats.parentElement !== host) host.appendChild(stats);
+    if(s3.parentElement !== host) host.appendChild(s3);
+  }
+
+  const prevRenderDashboardV10 = window.renderDashboard;
+  window.renderDashboard = function(){
+    if(typeof prevRenderDashboardV10 === 'function') prevRenderDashboardV10.apply(this, arguments);
+    try{ moveStatsInsideCommandCenter(); }catch(e){ console.warn('Move stats into command center error', e); }
+  };
+
+  setTimeout(()=>{ try{ moveStatsInsideCommandCenter(); }catch(e){} }, 250);
+  setTimeout(()=>{ try{ moveStatsInsideCommandCenter(); }catch(e){} }, 1000);
+  setTimeout(()=>{ try{ moveStatsInsideCommandCenter(); }catch(e){} }, 2200);
+})();
+</script>
+
+
+<script id="cmd-center-stats-position-v11">
+(function(){
+  function moveStatsJustBeforeAttendanceKPI(){
+    const wrap = document.getElementById('dash-tech-wrap');
+    const stats = document.getElementById('d-stats');
+    const s3 = document.getElementById('d-s3');
+    if(!wrap || !stats || !s3) return;
+
+    let host = document.getElementById('cmd-inside-blocks');
+    if(!host){
+      host = document.createElement('div');
+      host.id = 'cmd-inside-blocks';
+    }
+
+    const kpis = document.getElementById('dash-tech-kpis'); // this starts with Attendance % on Selected Date
+    if(kpis && host.nextElementSibling !== kpis){
+      wrap.insertBefore(host, kpis);
+    }else if(!host.parentElement){
+      wrap.appendChild(host);
+    }
+
+    if(stats.parentElement !== host) host.appendChild(stats);
+    if(s3.parentElement !== host) host.appendChild(s3);
+  }
+
+  const prevRenderDashboardV11 = window.renderDashboard;
+  window.renderDashboard = function(){
+    if(typeof prevRenderDashboardV11 === 'function') prevRenderDashboardV11.apply(this, arguments);
+    try{ moveStatsJustBeforeAttendanceKPI(); }catch(e){ console.warn('v11 stats position error', e); }
+  };
+
+  setTimeout(()=>{ try{ moveStatsJustBeforeAttendanceKPI(); }catch(e){} }, 250);
+  setTimeout(()=>{ try{ moveStatsJustBeforeAttendanceKPI(); }catch(e){} }, 1000);
+  setTimeout(()=>{ try{ moveStatsJustBeforeAttendanceKPI(); }catch(e){} }, 2200);
+})();
+</script>
+
 </body>
 </html>
