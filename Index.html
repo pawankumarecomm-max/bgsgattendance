@@ -6932,5 +6932,367 @@ boot();
 })();
 </script>
 
+
+
+<style id="dept-screenshot-layout-v12-style">
+  /* Department Daily Cost: screenshot-friendly compact layout */
+  #pg-dashboard .dept-explorer-upgraded.screenshot-mode{
+    border-radius:18px;
+    box-shadow:0 12px 28px rgba(15,23,42,.07);
+  }
+  #pg-dashboard .dept-explorer-upgraded.screenshot-mode .card-hdr{
+    padding:9px 14px;
+  }
+  #pg-dashboard .dept-explorer-upgraded.screenshot-mode .card-hdr h3{
+    font-size:15px;
+  }
+  #pg-dashboard .dept-explorer-upgraded.screenshot-mode .dept-list-note{
+    display:none!important;
+  }
+  #pg-dashboard .dept-explorer-upgraded.screenshot-mode input[type="date"]{
+    height:31px;
+    padding:4px 9px;
+    font-size:12px;
+  }
+  #pg-dashboard .dept-explorer-upgraded.screenshot-mode #d-dept-tabs{
+    gap:6px;
+    margin-bottom:8px;
+  }
+  #pg-dashboard .dept-explorer-upgraded.screenshot-mode .dept-tab{
+    padding:6px 11px;
+    font-size:11px;
+    box-shadow:none;
+  }
+  #pg-dashboard .dept-explorer-upgraded.screenshot-mode #d-dept-summary{
+    grid-template-columns:1.2fr repeat(4,minmax(0,.75fr));
+    gap:7px;
+    margin-bottom:8px;
+  }
+  #pg-dashboard .dept-explorer-upgraded.screenshot-mode .dept-mini-card{
+    padding:8px 10px;
+    border-radius:12px;
+    box-shadow:none;
+  }
+  #pg-dashboard .dept-explorer-upgraded.screenshot-mode .dept-mini-card .k{
+    font-size:8px;
+    letter-spacing:.65px;
+    margin-bottom:4px;
+  }
+  #pg-dashboard .dept-explorer-upgraded.screenshot-mode .dept-mini-card .v{
+    font-size:14px;
+    line-height:1.05;
+  }
+  #pg-dashboard .dept-explorer-upgraded.screenshot-mode .dept-mini-card .s{
+    font-size:9.5px;
+    margin-top:3px;
+  }
+  #pg-dashboard .dept-explorer-upgraded.screenshot-mode #d-dept-visuals,
+  #pg-dashboard .dept-explorer-upgraded.screenshot-mode #d-dept-table-caption,
+  #pg-dashboard .dept-explorer-upgraded.screenshot-mode > .scrollable{
+    display:none!important;
+  }
+  #pg-dashboard #dept-shot-toggle{
+    border-color:#fed7aa;
+    background:#fff7ed;
+    color:#c2410c;
+    font-weight:700;
+  }
+  #pg-dashboard .dept-explorer-upgraded.screenshot-mode #dept-shot-toggle{
+    background:linear-gradient(135deg,#f5a623,#f97316);
+    color:#111827;
+    border-color:transparent;
+  }
+  #pg-dashboard #d-dept-shot-panel{
+    display:none;
+    padding:0 14px 14px;
+  }
+  #pg-dashboard .dept-explorer-upgraded.screenshot-mode #d-dept-shot-panel{
+    display:block;
+  }
+  #pg-dashboard .dept-shot-card{
+    border:1px solid #dbe4f0;
+    background:linear-gradient(180deg,#ffffff 0%,#fbfdff 100%);
+    border-radius:16px;
+    overflow:hidden;
+  }
+  #pg-dashboard .dept-shot-top{
+    display:grid;
+    grid-template-columns:1.15fr 1.6fr;
+    gap:10px;
+    align-items:stretch;
+    padding:10px;
+    border-bottom:1px solid #e5edf6;
+    background:#f8fafc;
+  }
+  #pg-dashboard .dept-shot-title{
+    display:flex;
+    flex-direction:column;
+    justify-content:center;
+    gap:3px;
+    min-width:0;
+  }
+  #pg-dashboard .dept-shot-title strong{
+    font-size:16px;
+    line-height:1.05;
+    letter-spacing:-.2px;
+    color:#0f172a;
+  }
+  #pg-dashboard .dept-shot-title span{
+    font-size:11px;
+    color:#64748b;
+    font-weight:600;
+  }
+  #pg-dashboard .dept-shot-metrics{
+    display:grid;
+    grid-template-columns:repeat(5,minmax(0,1fr));
+    gap:6px;
+  }
+  #pg-dashboard .dept-shot-metric{
+    background:#fff;
+    border:1px solid #e2e8f0;
+    border-radius:12px;
+    padding:7px 8px;
+    min-width:0;
+  }
+  #pg-dashboard .dept-shot-metric .mk{
+    font-size:8px;
+    text-transform:uppercase;
+    letter-spacing:.55px;
+    color:#64748b;
+    font-weight:800;
+    margin-bottom:3px;
+    white-space:nowrap;
+  }
+  #pg-dashboard .dept-shot-metric .mv{
+    font-size:13px;
+    line-height:1.05;
+    color:#0f172a;
+    font-weight:900;
+    font-family:'DM Mono',monospace;
+    white-space:nowrap;
+  }
+  #pg-dashboard .dept-shot-grid{
+    display:grid;
+    grid-template-columns:repeat(4,minmax(0,1fr));
+    gap:6px;
+    padding:8px;
+  }
+  #pg-dashboard .dept-shot-emp{
+    display:grid;
+    grid-template-columns:24px minmax(0,1fr) auto;
+    gap:7px;
+    align-items:center;
+    border:1px solid #e2e8f0;
+    background:#fff;
+    border-radius:11px;
+    padding:6px 7px;
+    min-height:41px;
+  }
+  #pg-dashboard .dept-shot-no{
+    width:22px;height:22px;
+    border-radius:999px;
+    display:inline-flex;
+    align-items:center;justify-content:center;
+    background:#fff7ed;
+    color:#c2410c;
+    font-size:10px;
+    font-weight:900;
+    border:1px solid #fed7aa;
+  }
+  #pg-dashboard .dept-shot-name{
+    min-width:0;
+  }
+  #pg-dashboard .dept-shot-name strong{
+    display:block;
+    color:#111827;
+    font-size:11.2px;
+    font-weight:900;
+    line-height:1.15;
+    white-space:normal;
+    overflow:hidden;
+    display:-webkit-box;
+    -webkit-line-clamp:2;
+    -webkit-box-orient:vertical;
+  }
+  #pg-dashboard .dept-shot-name span{
+    display:block;
+    margin-top:1px;
+    color:#64748b;
+    font-size:9.5px;
+    font-weight:600;
+    line-height:1.1;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+  }
+  #pg-dashboard .dept-shot-cost{
+    text-align:right;
+    font-family:'DM Mono',monospace;
+    white-space:nowrap;
+  }
+  #pg-dashboard .dept-shot-cost strong{
+    display:block;
+    font-size:11px;
+    color:#0f172a;
+    font-weight:900;
+    line-height:1.1;
+  }
+  #pg-dashboard .dept-shot-cost span{
+    display:block;
+    font-size:9px;
+    color:#d97706;
+    font-weight:800;
+    line-height:1.1;
+    margin-top:2px;
+  }
+  #pg-dashboard .dept-shot-foot{
+    display:flex;
+    justify-content:space-between;
+    gap:10px;
+    padding:7px 10px;
+    background:#fffbeb;
+    border-top:1px solid #fde68a;
+    color:#92400e;
+    font-size:10.5px;
+    font-weight:800;
+  }
+  @media(max-width:1320px){
+    #pg-dashboard .dept-shot-grid{grid-template-columns:repeat(3,minmax(0,1fr));}
+    #pg-dashboard .dept-shot-top{grid-template-columns:1fr;}
+  }
+  @media(max-width:900px){
+    #pg-dashboard .dept-explorer-upgraded.screenshot-mode #d-dept-summary{grid-template-columns:repeat(2,minmax(0,1fr));}
+    #pg-dashboard .dept-shot-metrics{grid-template-columns:repeat(2,minmax(0,1fr));}
+    #pg-dashboard .dept-shot-grid{grid-template-columns:repeat(2,minmax(0,1fr));}
+  }
+</style>
+
+<script id="dept-screenshot-layout-v12-script">
+(function(){
+  const STORAGE_KEY='bgsg_dept_screenshot_view_v12';
+
+  function money(v){
+    try{ return '₹' + (typeof fmt==='function' ? fmt(v||0) : Math.round(Number(v||0)).toLocaleString('en-IN')); }
+    catch(e){ return '₹' + Math.round(Number(v||0)).toLocaleString('en-IN'); }
+  }
+  function formatDate(d){
+    try{ return (typeof fmtD==='function') ? fmtD(d) : d; }catch(e){ return d; }
+  }
+  function safeNumber(v){ return Number(v||0); }
+  function cssEscapeSimple(s){ return String(s||'').replace(/'/g,"\\'").replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  function getDeptCard(){
+    const pg=document.getElementById('pg-dashboard');
+    if(!pg) return null;
+    const cards=pg.querySelectorAll(':scope > .card');
+    return [...cards].find(c => c.querySelector('.card-hdr h3') && c.querySelector('.card-hdr h3').textContent.includes('Department Daily Cost Explorer')) || document.querySelector('#pg-dashboard .dept-explorer-upgraded');
+  }
+  function isShotMode(){
+    const stored=localStorage.getItem(STORAGE_KEY);
+    return stored===null ? true : stored==='1';
+  }
+  function setShotMode(on){
+    localStorage.setItem(STORAGE_KEY,on?'1':'0');
+    applyShotClass();
+    renderDeptShotPanel();
+  }
+  function applyShotClass(){
+    const card=getDeptCard();
+    if(!card) return;
+    card.classList.add('dept-explorer-upgraded');
+    card.classList.toggle('screenshot-mode', isShotMode());
+    const btn=document.getElementById('dept-shot-toggle');
+    if(btn){
+      btn.textContent=isShotMode()?'✓ Screenshot View':'📸 Screenshot View';
+      btn.title=isShotMode()?'Compact view is ON. Click to return to detailed table.':'Click to show compact screenshot layout with employee names in same frame.';
+    }
+  }
+  function installControls(){
+    const card=getDeptCard();
+    if(!card) return;
+    card.classList.add('dept-explorer-upgraded');
+    const cha=card.querySelector('.card-hdr .cha');
+    if(cha && !document.getElementById('dept-shot-toggle')){
+      const btn=document.createElement('button');
+      btn.type='button';
+      btn.id='dept-shot-toggle';
+      btn.className='btn btn-sm';
+      btn.onclick=function(){ setShotMode(!isShotMode()); };
+      const refresh=[...cha.querySelectorAll('button')].find(b => (b.textContent||'').includes('Refresh'));
+      if(refresh) refresh.insertAdjacentElement('afterend', btn);
+      else cha.appendChild(btn);
+    }
+    let panel=document.getElementById('d-dept-shot-panel');
+    if(!panel){
+      panel=document.createElement('div');
+      panel.id='d-dept-shot-panel';
+      const caption=document.getElementById('d-dept-table-caption');
+      if(caption) caption.insertAdjacentElement('beforebegin', panel);
+      else {
+        const scroll=card.querySelector('.scrollable');
+        if(scroll) scroll.insertAdjacentElement('beforebegin', panel);
+        else card.appendChild(panel);
+      }
+    }
+    applyShotClass();
+  }
+  function renderDeptShotPanel(){
+    installControls();
+    const panel=document.getElementById('d-dept-shot-panel');
+    if(!panel) return;
+    const dateEl=document.getElementById('d-dept-date');
+    const date=(dateEl && dateEl.value) || window.__cmdSelectedDate || (typeof yesterday==='function' ? yesterday() : new Date().toISOString().slice(0,10));
+    const data=(typeof getDepartmentCostData==='function') ? getDepartmentCostData(date) : [];
+    const selected=window.DASH_DEPT_SELECTED || (data[0] && data[0].department) || '—';
+    const active=data.find(g=>g.department===selected) || data[0] || {department:selected,employees:[],salary:0,ot:0,total:0,present:0,absent:0,holiday:0};
+    const emps=(active.employees||[]).filter(e=>e.status==='P').sort((a,b)=>safeNumber(b.totalCost)-safeNumber(a.totalCost) || String(a.name||'').localeCompare(String(b.name||'')));
+    const totalStaff=(active.employees||[]).length;
+    const otStaff=emps.filter(e=>safeNumber(e.otHours)>0).length;
+    const avg=active.present ? Math.round(safeNumber(active.total)/safeNumber(active.present)) : 0;
+    const title=(typeof isMdAll==='function' && isMdAll()) ? 'Unit' : 'Department';
+    const empHtml=emps.length ? emps.map((e,i)=>{
+      const otH=safeNumber(e.otHours);
+      const pos=e.position || (e.unit || '');
+      return `<div class="dept-shot-emp">
+        <div class="dept-shot-no">${i+1}</div>
+        <div class="dept-shot-name"><strong>${cssEscapeSimple(e.name||'')}</strong><span>${cssEscapeSimple(pos||'—')} · ${safeNumber(e.shift)||''}h shift</span></div>
+        <div class="dept-shot-cost"><strong>${money(e.totalCost||0)}</strong><span>${otH?('OT '+(otH>0?'+':'')+otH.toFixed(1)+'h'):'No OT'}</span></div>
+      </div>`;
+    }).join('') : `<div style="grid-column:1/-1;text-align:center;padding:22px;color:#64748b;font-weight:700">No present employees on ${formatDate(date)}</div>`;
+
+    panel.innerHTML=`<div class="dept-shot-card">
+      <div class="dept-shot-top">
+        <div class="dept-shot-title"><strong>${cssEscapeSimple(active.department||'—')} ${title} Cost</strong><span>${formatDate(date)} · ${safeNumber(active.present)} present of ${totalStaff} staff · Employee names included for screenshot</span></div>
+        <div class="dept-shot-metrics">
+          <div class="dept-shot-metric"><div class="mk">Present</div><div class="mv">${safeNumber(active.present)}/${totalStaff}</div></div>
+          <div class="dept-shot-metric"><div class="mk">Salary</div><div class="mv" style="color:#16a34a">${money(active.salary||0)}</div></div>
+          <div class="dept-shot-metric"><div class="mk">OT Cost</div><div class="mv" style="color:#d97706">${money(active.ot||0)}</div></div>
+          <div class="dept-shot-metric"><div class="mk">Total</div><div class="mv" style="color:#f97316">${money(active.total||0)}</div></div>
+          <div class="dept-shot-metric"><div class="mk">Avg/Emp</div><div class="mv">${money(avg)}</div></div>
+        </div>
+      </div>
+      <div class="dept-shot-grid">${empHtml}</div>
+      <div class="dept-shot-foot"><span>Absent ${safeNumber(active.absent)} · Holiday ${safeNumber(active.holiday)} · OT Staff ${otStaff}</span><span>BGSG Pay Roll</span></div>
+    </div>`;
+    applyShotClass();
+  }
+
+  const prevDeptRender=window.renderDashboardDeptView;
+  window.renderDashboardDeptView=function(forceDept){
+    if(typeof prevDeptRender==='function') prevDeptRender.apply(this, arguments);
+    try{ renderDeptShotPanel(); }catch(e){ console.warn('dept screenshot panel render error', e); }
+  };
+
+  const prevDashRender=window.renderDashboard;
+  window.renderDashboard=function(){
+    if(typeof prevDashRender==='function') prevDashRender.apply(this, arguments);
+    try{ installControls(); renderDeptShotPanel(); }catch(e){ console.warn('dept screenshot dashboard hook error', e); }
+  };
+
+  setTimeout(()=>{ try{ installControls(); renderDeptShotPanel(); }catch(e){} }, 300);
+  setTimeout(()=>{ try{ installControls(); renderDeptShotPanel(); }catch(e){} }, 1100);
+  setTimeout(()=>{ try{ installControls(); renderDeptShotPanel(); }catch(e){} }, 2300);
+})();
+</script>
+
 </body>
 </html>
