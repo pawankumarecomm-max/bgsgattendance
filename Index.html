@@ -871,16 +871,37 @@ async function gasGet(params) {
       );
       return { ok:true };
 
-    case 'updateEmployeeBank':
-      await sb(
-        getSupabase().from(TABLES.EMP).update({
-          account_holder_name: String(params.account_holder_name || '').trim(),
-          bank_account_no: String(params.bank_account_no || '').trim(),
-          ifsc_code: String(params.ifsc_code || '').trim().toUpperCase()
-        }).eq('id', num(params.id)),
-        'Save bank details'
-      );
+    case 'updateEmployeeBank': {
+      const _bankBase = {
+        bank_account_no: String(params.bank_account_no || '').trim(),
+        ifsc_code:       String(params.ifsc_code       || '').trim().toUpperCase()
+      };
+      // Try saving with account_holder_name; if column missing, fall back gracefully
+      try {
+        await sb(
+          getSupabase().from(TABLES.EMP).update({
+            account_holder_name: String(params.account_holder_name || '').trim(),
+            ..._bankBase
+          }).eq('id', num(params.id)),
+          'Save bank details'
+        );
+      } catch(_bankErr) {
+        const _msg = String(_bankErr && _bankErr.message ? _bankErr.message : _bankErr);
+        if (/account_holder_name|column/i.test(_msg)) {
+          // Column not yet added — save bank fields without it
+          await sb(
+            getSupabase().from(TABLES.EMP).update(_bankBase).eq('id', num(params.id)),
+            'Save bank details (no holder name col)'
+          );
+          throw new Error(
+            'Bank A/C and IFSC saved. To also save Account Holder Name, add the column in Supabase: ' +
+            "ALTER TABLE employees ADD COLUMN IF NOT EXISTS account_holder_name text default '';"
+          );
+        }
+        throw _bankErr;
+      }
       return { ok:true };
+    }
 
     case 'saveAllEmployees': {
       const rows = ensureArray(params.rows).map(r => {
@@ -1099,7 +1120,9 @@ function parseAll(data) {
   EMPS = (data.employees||[])
     .filter(r=>String(r.status||'ACTIVE').toUpperCase()!=='INACTIVE' && r.name)
     .map(r=>({id:+r.id, name:String(r.name).trim(), dept:String(r.department||'').trim(), pos:String(r.position||'').trim(),
-              salary:+r.salary||0, shift:+r.shift||8, bank_account_no:String(r.bank_account_no||'').trim(), ifsc_code:String(r.ifsc_code||'').trim().toUpperCase()}));
+              salary:+r.salary||0, shift:+r.shift||8,
+              account_holder_name:String(r.account_holder_name||'').trim(),
+              bank_account_no:String(r.bank_account_no||'').trim(), ifsc_code:String(r.ifsc_code||'').trim().toUpperCase()}));
 
   // Attendance — index by date → empId
   ATTS = {};
@@ -1441,7 +1464,17 @@ async function saveEmployeeBank(eid){
   try{
     await gasGet({action:'updateEmployeeBank',id:eid,account_holder_name:ahn,bank_account_no:acc,ifsc_code:ifsc,unit_name:emp.unit});
     setPill('ok','Synced ✓'); renderEmpTable(); toast('✓ Bank details saved for '+emp.name,'ok');
-  }catch(e){setPill('err','Cloud save failed'); toast('Add bank_account_no and ifsc_code columns in Supabase, then try again. '+e.message,'err');}
+  }catch(e){
+    const _em=String(e&&e.message?e.message:e);
+    // If only the account_holder_name column is missing, it's a soft warning — bank was still saved
+    if(/account_holder_name/i.test(_em)){
+      setPill('ok','Bank saved (partial)');
+      toast('⚠ '+_em,'i');
+    } else {
+      setPill('err','Cloud save failed');
+      toast('⚠ '+_em,'err');
+    }
+  }
 }
 function normalizeAdvanceRecord(v){
   if(v && typeof v === 'object'){
@@ -3080,6 +3113,7 @@ boot();
         pos:String(r.position||'').trim(),
         salary:+r.salary||0,
         shift:+r.shift||8,
+        account_holder_name:String(r.account_holder_name||'').trim(),
         bank_account_no:String(r.bank_account_no||'').trim(),
         ifsc_code:String(r.ifsc_code||'').trim().toUpperCase(),
         unit:normalizeUnit(r.unit_name || r.unit)
@@ -3171,11 +3205,28 @@ boot();
     }
     if(action === 'updateEmployeeBank'){
       assertSupabaseReady();
-      await sb(getSupabase().from(TABLES.EMP).update({
-        account_holder_name:String(params.account_holder_name||'').trim(),
-        bank_account_no:String(params.bank_account_no||'').trim(),
-        ifsc_code:String(params.ifsc_code||'').trim().toUpperCase()
-      }).eq('id', num(params.id)), 'Save bank details');
+      const _bBase = {
+        bank_account_no: String(params.bank_account_no||'').trim(),
+        ifsc_code:       String(params.ifsc_code||'').trim().toUpperCase()
+      };
+      try {
+        await sb(getSupabase().from(TABLES.EMP).update({
+          account_holder_name: String(params.account_holder_name||'').trim(),
+          ..._bBase
+        }).eq('id', num(params.id)), 'Save bank details');
+      } catch(_bErr) {
+        const _bMsg = String(_bErr && _bErr.message ? _bErr.message : _bErr);
+        if (/account_holder_name|column/i.test(_bMsg)) {
+          // Column missing — save bank fields, surface a helpful message
+          await sb(getSupabase().from(TABLES.EMP).update(_bBase).eq('id', num(params.id)),
+            'Save bank details (no holder name col)');
+          throw new Error(
+            "Bank A/C and IFSC saved. To save Account Holder Name too, run this in Supabase SQL Editor: " +
+            "ALTER TABLE employees ADD COLUMN IF NOT EXISTS account_holder_name text default '';"
+          );
+        }
+        throw _bErr;
+      }
       return {ok:true};
     }
     if(action === 'saveAttendance'){
