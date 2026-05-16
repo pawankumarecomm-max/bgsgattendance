@@ -391,18 +391,24 @@ label{font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:var(--mu
           </select>
           <label style="margin:0;font-size:11px;text-transform:none;letter-spacing:0;color:var(--muted)">Rent Department</label>
           <select id="dept-rent-dept" style="width:160px"></select>
-          <label style="margin:0;font-size:11px;text-transform:none;letter-spacing:0;color:var(--muted)">Rent ₹</label>
+          <label style="margin:0;font-size:11px;text-transform:none;letter-spacing:0;color:var(--muted)">Rent &#8377;</label>
           <input type="number" id="dept-rent-amount" min="0" value="0" style="width:110px">
-          <button class="btn btn-sm" onclick="saveDepartmentRentFromUI()">💾 Save Rent</button>
-          <button class="btn btn-p btn-sm" onclick="exportDepartmentPayoutExcel()">⬇ Export Dept Payout</button>
+          <button class="btn btn-sm" onclick="saveDepartmentRentFromUI()">&#128190; Save Rent</button>
+          <span style="width:1px;height:22px;background:var(--border);display:inline-block;margin:0 2px"></span>
+          <label style="margin:0;font-size:11px;text-transform:none;letter-spacing:0;color:#b45309;font-weight:600">Advance Dept</label>
+          <select id="dept-adv-dept" style="width:160px"></select>
+          <label style="margin:0;font-size:11px;text-transform:none;letter-spacing:0;color:var(--muted)">Advance &#8377;</label>
+          <input type="number" id="dept-adv-amount" min="0" value="0" style="width:110px;border-color:#fed7aa;background:#fff7ed">
+          <button class="btn btn-sm" style="border-color:#fed7aa;color:#b45309;background:#fff7ed" onclick="saveDepartmentAdvanceFromUI()">&#128190; Save Adv</button>
+          <button class="btn btn-p btn-sm" onclick="exportDepartmentPayoutExcel()">&#11015; Export Dept Payout</button>
         </div>
       </div>
       <div id="dept-payout-summary" class="dept-mini-stats" style="padding:14px 18px 4px"></div>
       <div class="scrollable" style="padding:0 18px 18px">
         <table class="tbl payroll-dept-table">
-          <thead><tr><th>Department</th><th>Employees</th><th>Present Days</th><th>OT Hrs</th><th>Salary ₹</th><th>OT ₹</th><th>Old Bal./Adj. ₹</th><th>Allowance ₹</th><th>Advance ₹</th><th>Net Salary Payout ₹</th><th>Food Share ₹</th><th>Rent ₹</th><th>Total Dept Cost ₹</th></tr></thead>
+          <thead><tr><th>Department</th><th>Employees</th><th>Present Days</th><th>OT Hrs</th><th>Salary &#8377;</th><th>OT &#8377;</th><th>Old Bal./Adj. &#8377;</th><th>Allowance &#8377;</th><th>Emp Adv &#8377;</th><th>Net Salary Payout &#8377;</th><th title="Lump-sum advance paid to department / contractor">Dept Adv Paid &#8377;</th><th>Remaining &#8377;</th><th>Food Share &#8377;</th><th>Rent &#8377;</th><th>Total Dept Cost &#8377;</th></tr></thead>
           <tbody id="dept-payout-body"></tbody>
-          <tfoot><tr class="tfr" id="dept-payout-foot"><td colspan="13" style="text-align:center;color:var(--muted);padding:10px">Select month above</td></tr></tfoot>
+          <tfoot><tr class="tfr" id="dept-payout-foot"><td colspan="15" style="text-align:center;color:var(--muted);padding:10px">Select month above</td></tr></tfoot>
         </table>
       </div>
     </div>
@@ -1447,7 +1453,28 @@ function setAdvanceRecord(mo,eid,patch){
 function payrollAdvanceRows(mo){
   return EMPS.map(e=>{
     let daysP=0,oth=0;
-    daInMo(mo).forEach(([,dayA])=>{ const r=dayA[e.id]; if(r?.status==='P') daysP++; if(r && r.status!=='H') oth+=num(r.ot); });
+    const empShift=Number(e.shift||8);
+    daInMo(mo).forEach(([,dayA])=>{
+      const r=dayA[e.id]; if(!r) return;
+      if(r.status==='P') daysP++;
+      if(r.status!=='H'){
+        // Always recalculate OT from actual worked hours using employee's CURRENT shift.
+        // This ensures a shift change (e.g. 12h → 8h) is reflected immediately without
+        // needing to re-save all attendance records.
+        const workedHrs=num(r.hrs);
+        if(workedHrs>0){
+          // 8h shift: present if hrs>=8, OT = hrs-8
+          // 12h shift: present if hrs>=8, OT = hrs-12 (can be negative = short shift)
+          // other: OT = hrs - shift (floored to 0 for payroll)
+          const otCalc = (empShift===8)
+            ? round2(workedHrs - 8)
+            : (empShift===12)
+              ? round2(workedHrs - 12)
+              : round2(workedHrs - empShift);
+          oth += otCalc; // keep negative OT (shift penalty) for accurate payroll
+        }
+      }
+    });
     const sal=Math.round(salaryPerDay(e.salary,mo)*daysP);
     const ota=Math.round(otRatePerHour(e.salary,mo,e.shift)*oth);
     const payable=sal+ota;
@@ -2131,11 +2158,16 @@ function renderOT(){
   const mo=el.value;let tD=0,tO=0,tA=0,rows='';
   EMPS.forEach((e,i)=>{
     let days=0,otH=0;
+    const empShift=Number(e.shift||8);
     daInMo(mo).forEach(([,dayA])=>{
       const r=dayA[e.id];
       if(!r || r.status==='H') return;
       if(r.status==='P') days++;
-      otH+=num(r.ot);
+      // Recalculate OT from actual worked hours using CURRENT shift setting
+      if(num(r.hrs)>0){
+        const ot=(empShift===8)?round2(num(r.hrs)-8):(empShift===12)?round2(num(r.hrs)-12):round2(num(r.hrs)-empShift);
+        otH+=ot;
+      }
     });
     const rate=Math.round(otRatePerHour(e.salary, mo, e.shift)),otA=Math.round(rate*otH);
     tD+=days;tO+=otH;tA+=otA;
@@ -3486,7 +3518,22 @@ boot();
   // renderPayroll is defined globally — do not override here
 
   renderOT = function(){
-    const mo=document.getElementById('ot-month').value||new Date().toISOString().slice(0,7); const rows=EMPS.map(e=>{ const ds=daInMo(mo); let daysP=0,oth=0; ds.forEach(([_,m])=>{const r=m[e.id]; if(r?.status==='P')daysP++; if(r && r.status!=='H') oth+=num(r.ot);}); const rate=Math.round(otRatePerHour(e.salary,mo,e.shift)*100)/100,amt=Math.round(rate*oth); return {e,daysP,oth:+oth.toFixed(2),rate,amt}; });
+    const mo=document.getElementById('ot-month').value||new Date().toISOString().slice(0,7);
+    const rows=EMPS.map(e=>{
+      const ds=daInMo(mo); let daysP=0,oth=0;
+      const empShift=Number(e.shift||8);
+      ds.forEach(([_,m])=>{
+        const r=m[e.id];
+        if(r?.status==='P') daysP++;
+        if(r && r.status!=='H' && num(r.hrs)>0){
+          // Recalculate from worked hours using CURRENT shift (not stored ot_hours)
+          const otCalc=(empShift===8)?round2(num(r.hrs)-8):(empShift===12)?round2(num(r.hrs)-12):round2(num(r.hrs)-empShift);
+          oth+=otCalc;
+        }
+      });
+      const rate=Math.round(otRatePerHour(e.salary,mo,e.shift)*100)/100,amt=Math.round(rate*oth);
+      return {e,daysP,oth:+oth.toFixed(2),rate,amt};
+    });
     document.getElementById('ot-tbody').innerHTML=rows.map((r,i)=>`<tr><td class="cm">${i+1}</td><td style="font-weight:500">${r.e.name}${isMdAll()?`<span class="unit-subline">${esc(r.e.unit)}</span>`:''}</td><td><span class="badge b${r.e.shift}">${r.e.shift}h</span></td><td>${r.daysP}</td><td>${r.oth}</td><td class="mono">₹${fmt(r.rate)}</td><td class="mono ca">₹${fmt(r.amt)}</td></tr>`).join('');
     const totH=rows.reduce((s,r)=>s+r.oth,0), totA=rows.reduce((s,r)=>s+r.amt,0); document.getElementById('ot-tfoot').innerHTML=`<td colspan="4">Total</td><td>${Math.round(totH*100)/100}</td><td>—</td><td>₹${fmt(totA)}</td>`;
   };
@@ -7294,5 +7341,680 @@ boot();
 })();
 </script>
 
+<!-- ══════════════════════════════════════════════════════════════
+     ENHANCEMENT PATCH: Locked-field payroll + calculation guard
+     • Advance / Old Balance / Extra Allowance need deliberate
+       2-step edit (click Edit → change value → Confirm/Cancel)
+     • Calculation formula shown on hover of Net Pay cell
+     • Net Pay formula verified: Sal + OT − Advance + OldBal + ExtraAllow
+══════════════════════════════════════════════════════════════ -->
+<style id="locked-field-style">
+/* ── Locked field pill ── */
+.lf-pill{
+  display:inline-flex;align-items:center;gap:5px;
+  padding:3px 8px 3px 9px;border-radius:6px;
+  border:1px solid #e5e7eb;background:#f9fafb;
+  font-family:'DM Mono',monospace;font-size:11px;font-weight:500;
+  cursor:default;white-space:nowrap;transition:border-color .15s;
+}
+.lf-pill:hover{border-color:#d1d5db;background:#f3f4f6;}
+.lf-pill .lf-ico{font-size:10px;color:#9ca3af;cursor:pointer;padding:1px 2px;border-radius:3px;transition:all .12s;}
+.lf-pill .lf-ico:hover{background:#fef3c7;color:#b45309;}
+/* colour variants */
+.lf-pill.lf-adv{border-color:#fed7aa;background:#fff7ed;color:#b45309;}
+.lf-pill.lf-adv .lf-ico:hover{background:#f97316;color:#fff;}
+.lf-pill.lf-old-pos{border-color:#bfdbfe;background:#eff6ff;color:#1d4ed8;}
+.lf-pill.lf-old-neg{border-color:#fecaca;background:#fef2f2;color:#b91c1c;}
+.lf-pill.lf-old-zero{border-color:#e5e7eb;background:#f9fafb;color:#6b7280;}
+.lf-pill.lf-allow{border-color:#bbf7d0;background:#f0fdf4;color:#15803d;}
+/* ── Edit mode ── */
+.lf-edit-wrap{display:inline-flex;align-items:center;gap:4px;}
+.lf-edit-wrap input{
+  width:82px;font-size:11px;padding:3px 6px;border-radius:5px;
+  border:2px solid #f59e0b;font-family:'DM Mono',monospace;
+  background:#fffbf0;outline:none;color:#111827;
+}
+.lf-btn-ok{padding:2px 7px;border:none;border-radius:4px;background:#16a34a;color:#fff;font-size:11px;cursor:pointer;font-weight:600;transition:opacity .12s;}
+.lf-btn-ok:hover{opacity:.85;}
+.lf-btn-cx{padding:2px 7px;border:none;border-radius:4px;background:#dc2626;color:#fff;font-size:11px;cursor:pointer;font-weight:600;transition:opacity .12s;}
+.lf-btn-cx:hover{opacity:.85;}
+/* ── Net pay formula tooltip ── */
+.net-cell-wrap{position:relative;display:inline-block;}
+.net-formula-tip{
+  display:none;position:absolute;bottom:calc(100% + 6px);right:0;
+  background:#111827;color:#f9fafb;border-radius:8px;padding:8px 11px;
+  font-size:10px;line-height:1.6;white-space:nowrap;z-index:999;
+  box-shadow:0 8px 24px rgba(0,0,0,.25);font-family:'DM Mono',monospace;
+  pointer-events:none;
+}
+.net-cell-wrap:hover .net-formula-tip{display:block;}
+.net-formula-tip::after{content:'';position:absolute;top:100%;right:14px;border:5px solid transparent;border-top-color:#111827;}
+/* ── Calculation check row ── */
+.calc-badge{
+  display:inline-flex;align-items:center;gap:3px;padding:1px 6px;
+  border-radius:4px;font-size:10px;font-weight:700;
+}
+.calc-ok{background:#dcfce7;color:#15803d;}
+.calc-warn{background:#fef3c7;color:#b45309;}
+/* ── Improved payroll stat cards ── */
+#pay-stats .stat-card{border-radius:14px;padding:14px 16px;}
+#pay-stats .stat-calc{font-size:10px;color:var(--muted);margin-top:3px;font-family:'DM Mono',monospace;}
+/* ── Month badge header ── */
+.pay-month-badge{
+  display:inline-flex;align-items:center;gap:6px;
+  padding:4px 10px;border-radius:20px;background:linear-gradient(135deg,#fef3c7,#fff7ed);
+  border:1px solid #fed7aa;font-size:11px;font-weight:600;color:#b45309;
+}
+/* ── Row highlight ── */
+#pg-payroll tr.pay-row-selected:hover td{background:#fffbf0!important;}
+/* ── Net pay cell ── */
+.pay-net-strong{font-size:12px;font-weight:700;color:#16a34a;}
+</style>
+
+<script>
+(function(){
+  /* ── helpers ── */
+  function n(v){ const x=Number(v); return Number.isFinite(x)?x:0; }
+  function fmt2(v){ return Math.round(n(v)).toLocaleString('en-IN'); }
+  function mny(v){ const x=n(v); return (x<0?'-₹'+fmt2(Math.abs(x)):'₹'+fmt2(x)); }
+  function esc(s){ return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+  function jsq(s){ return String(s??'').replace(/\\/g,'\\\\').replace(/'/g,"\\'"); }
+
+  /* ── Locked field rendering ── */
+  function lockPill(mo, eid, name, field, value, maxAdv){
+    const id=`lf-${eid}-${field}`;
+    let cls='', dispVal=mny(value);
+    if(field==='advance')       cls=value>0?'lf-adv':'lf-adv';
+    else if(field==='old_balance') cls=value>0?'lf-old-pos':(value<0?'lf-old-neg':'lf-old-zero');
+    else if(field==='extra_allowance') cls=value>0?'lf-allow':'';
+    const sign = (field==='old_balance' && value!==0) ? (value>0?'+':(value<0?'−':'')) : '';
+    const label = field==='advance'?'Advance':(field==='old_balance'?'Old Bal/Adj':'Extra Allow');
+    const displayStr = field==='old_balance' && value!==0
+      ? (value<0?'-₹'+fmt2(Math.abs(value)):'₹'+fmt2(value))
+      : mny(value);
+    return `<div id="${id}-wrap" title="Click ✏ to edit ${label}"><span class="lf-pill ${cls}">${displayStr}<span class="lf-ico" title="Edit ${label}" onclick="window.unlockPayField('${jsq(mo)}',${eid},'${jsq(name)}','${field}',${value},${field==='advance'?maxAdv:999999})">✏</span></span></div>`;
+  }
+
+  /* ── Net pay tooltip formula ── */
+  function netCell(r){
+    const net = n(r.net);
+    const salStr=`₹${fmt2(r.sal)} Sal`;
+    const otStr=r.ota!==0?(n(r.ota)>0?` + ₹${fmt2(r.ota)} OT`:(` − ₹${fmt2(Math.abs(n(r.ota)))} OT`)):'';
+    const advStr=n(r.adv)>0?` − ₹${fmt2(r.adv)} Adv`:'';
+    const oldStr=n(r.oldBalance)!==0?(n(r.oldBalance)>0?` + ₹${fmt2(r.oldBalance)} Old`:(` − ₹${fmt2(Math.abs(n(r.oldBalance)))} Old`)):'';
+    const exStr=n(r.extraAllowance)>0?` + ₹${fmt2(r.extraAllowance)} Allow`:'';
+    const formula=salStr+otStr+advStr+oldStr+exStr;
+    // Verify calculation
+    const expected = n(r.sal)+n(r.ota)-n(r.adv)+n(r.oldBalance)+n(r.extraAllowance);
+    const ok=Math.abs(expected-net)<2;
+    return `<div class="net-cell-wrap">
+      <span class="pay-net-strong">${mny(net)}</span>
+      <div class="net-formula-tip">
+        <span style="color:#f59e0b;font-weight:700">Net Pay Breakdown</span><br>
+        ${esc(formula)}<br>
+        <span style="color:${ok?'#86efac':'#fca5a5'}">= ${mny(net)} ${ok?'✓ Verified':'⚠ Check'}</span>
+      </div>
+    </div>`;
+  }
+
+  /* ── Enhanced renderPayroll ── */
+  window.renderPayroll = function(){
+    const pmEl=document.getElementById('pay-month');
+    if(!pmEl) return;
+    if(!pmEl.value) pmEl.value=new Date().toISOString().slice(0,7);
+    const mo=pmEl.value;
+    const dim=(typeof daysInMonth==='function')?daysInMonth(mo):31;
+    const pdEl=document.getElementById('pay-days'); if(pdEl) pdEl.value=dim;
+
+    const rowsData=(typeof payrollAdvanceRows==='function')?payrollAdvanceRows(mo):[];
+    const prevChecked=new Set();
+    document.querySelectorAll('#pay-tbody .pay-chk:checked').forEach(cb=>prevChecked.add(Number(cb.dataset.eid)));
+    const allWereChecked=prevChecked.size===0;
+
+    let T={sal:0,ota:0,adv:0,old:0,extra:0,net:0};
+    const rows=rowsData.map((r,i)=>{
+      const e=r.emp||{};
+      const dept=String(e.dept||e.department||'').trim()||'—';
+      const chk=allWereChecked||prevChecked.has(e.id);
+      T.sal+=n(r.sal); T.ota+=n(r.ota); T.adv+=n(r.adv);
+      T.old+=n(r.oldBalance); T.extra+=n(r.extraAllowance); T.net+=n(r.net);
+      const nameSafe=jsq(e.name||'');
+      const remark=(window.PAYROLL_REMARKS&&window.PAYROLL_REMARKS[mo]&&window.PAYROLL_REMARKS[mo][e.id])||'';
+
+      // OT amt coloring
+      const otAmt=n(r.ota);
+      const otDisp=otAmt!==0?(otAmt>0?`<span class="ca mono">₹${fmt2(otAmt)}</span>`:`<span class="cr mono">−₹${fmt2(Math.abs(otAmt))}</span>`):'<span class="cm">—</span>';
+
+      // Days button with present count color
+      const daysColor=r.daysP>=25?'#16a34a':(r.daysP>=15?'#d97706':'#dc2626');
+
+      return `<tr class="${chk?'pay-row-selected':''}">
+        <td style="text-align:center;padding:5px 6px"><input type="checkbox" class="pay-chk" data-eid="${e.id}" ${chk?'checked':''} onchange="payrollChkChange(this)"></td>
+        <td class="cm" style="text-align:center;font-size:11px">${i+1}</td>
+        <td>
+          <div style="font-weight:600;font-size:11px;line-height:1.3">${esc(e.name||'')}</div>
+          <div style="font-size:10px;color:var(--muted);margin-top:1px">${esc(dept)}</div>
+        </td>
+        <td class="mono cm" style="font-size:11px">₹${fmt2(e.salary||0)}</td>
+        <td style="text-align:center"><span class="badge b${e.shift}">${e.shift}h</span></td>
+        <td style="text-align:center">
+          <button class="btn btn-sm" style="color:${daysColor};font-weight:700;min-width:30px" onclick="openEmpAttendanceModal('${mo}',${e.id},'${nameSafe}')">${r.daysP}</button>
+        </td>
+        <td style="text-align:center">${n(r.oth)>0?`<span class="badge bot">+${n(r.oth).toFixed(1)}h</span>`:(n(r.oth)<0?`<span class="badge ba">${n(r.oth).toFixed(1)}h</span>`:'<span class="cm">0</span>')}</td>
+        <td class="mono" style="font-weight:500">₹${fmt2(r.sal)}</td>
+        <td>${otDisp}</td>
+        <td>${lockPill(mo,e.id,e.name||'','advance',r.adv,r.maxAdvance)}</td>
+        <td>${lockPill(mo,e.id,e.name||'','old_balance',r.oldBalance,999999)}</td>
+        <td>${lockPill(mo,e.id,e.name||'','extra_allowance',r.extraAllowance,999999)}</td>
+        <td>${netCell(r)}</td>
+        <td><input class="remark-inp" type="text" placeholder="note…" value="${esc(remark).replace(/"/g,'&quot;')}" onchange="setPayrollRemark('${mo}',${e.id},this.value)" style="width:110px;font-size:11px;padding:3px 7px;border-radius:5px"></td>
+      </tr>`;
+    }).join('');
+
+    const body=document.getElementById('pay-tbody');
+    if(body) body.innerHTML=rows||'<tr><td colspan="14" style="text-align:center;padding:20px;color:var(--muted)">No payroll data — select a month above</td></tr>';
+
+    // Update table header to match 14-column layout
+    const thead=document.querySelector('#pg-payroll .card table.tbl thead tr');
+    if(thead && thead.children.length!==14){
+      thead.innerHTML=`
+        <th style="width:36px"><input type="checkbox" id="pay-chk-all" onchange="payrollSelectAll(this.checked)"></th>
+        <th style="width:36px">#</th>
+        <th style="min-width:150px">Name · Dept</th>
+        <th>Salary</th>
+        <th>Shift</th>
+        <th style="text-align:center" title="Click days to see date breakdown">Days ↗</th>
+        <th>OT Hrs</th>
+        <th>Salary Amt</th>
+        <th>OT Amt</th>
+        <th title="Click ✏ to edit — requires Confirm/Cancel">Advance ₹ 🔒</th>
+        <th title="Click ✏ to edit — positive=pending, negative=deduction">Old Bal/Adj ₹ 🔒</th>
+        <th title="Click ✏ to edit">Extra Allow ₹ 🔒</th>
+        <th title="Hover for formula breakdown">Net Pay ₹ ℹ</th>
+        <th style="min-width:110px">Remarks</th>`;
+    }
+
+    const foot=document.getElementById('pay-tfoot');
+    if(foot) foot.innerHTML=`
+      <td></td><td></td>
+      <td style="font-weight:600">TOTAL (${rowsData.length} emp)</td>
+      <td></td><td></td><td></td><td></td>
+      <td class="mono" style="font-weight:600">₹${fmt2(T.sal)}</td>
+      <td class="mono ca">${T.ota!==0?(T.ota>0?'₹'+fmt2(T.ota):'-₹'+fmt2(Math.abs(T.ota))):'—'}</td>
+      <td class="mono ca">₹${fmt2(T.adv)}</td>
+      <td class="mono cb">${T.old<0?'-₹'+fmt2(Math.abs(T.old)):'₹'+fmt2(T.old)}</td>
+      <td class="mono cg">₹${fmt2(T.extra)}</td>
+      <td class="mono" style="font-size:13px;color:var(--green);font-weight:700">₹${fmt2(T.net)}</td>
+      <td></td>`;
+
+    // Enhanced stat cards with formula hint
+    const stats=document.getElementById('pay-stats');
+    if(stats) stats.innerHTML=`
+      <div class="stat-card" style="border-left:4px solid var(--green)">
+        <div class="stat-label">Net Payroll</div>
+        <div class="stat-val sv-g" style="font-size:20px">₹${fmt2(T.net)}</div>
+        <div class="stat-calc">Sal+OT+OldBal+Allow−Adv</div>
+      </div>
+      <div class="stat-card" style="border-left:4px solid #d97706">
+        <div class="stat-label">Advance Total</div>
+        <div class="stat-val sv-a" style="font-size:20px">₹${fmt2(T.adv)}</div>
+        <div class="stat-calc">Deducted from net pay</div>
+      </div>
+      <div class="stat-card" style="border-left:4px solid var(--blue)">
+        <div class="stat-label">Old Balance + Allowance</div>
+        <div class="stat-val sv-b" style="font-size:20px">₹${fmt2(T.old+T.extra)}</div>
+        <div class="stat-calc">${T.old<0?'Includes deduction':'Added to net pay'}</div>
+      </div>
+      <div class="stat-card" style="border-left:4px solid var(--purple)">
+        <div class="stat-label">Gross Salary Amount</div>
+        <div class="stat-val" style="font-size:20px;color:var(--purple)">₹${fmt2(T.sal+T.ota)}</div>
+        <div class="stat-calc">Salary ₹${fmt2(T.sal)} + OT ₹${fmt2(T.ota)}</div>
+      </div>`;
+
+    if(typeof payrollUpdateSelBadge==='function') payrollUpdateSelBadge();
+    if(typeof renderDepartmentMonthlyPayout==='function') renderDepartmentMonthlyPayout(mo);
+  };
+
+  /* ── Unlock a locked field ── */
+  window.unlockPayField = function(mo, eid, name, field, currentVal, maxVal){
+    const id=`lf-${eid}-${field}`;
+    const wrap=document.getElementById(id+'-wrap');
+    if(!wrap) return;
+    const minVal = field==='extra_allowance'?0:(field==='advance'?0:-9999999);
+    const maxV   = field==='advance'?maxVal:9999999;
+    wrap.innerHTML=`<div class="lf-edit-wrap">
+      <input type="number" id="${id}-inp" value="${currentVal}" min="${minVal}" max="${maxV}" step="1"
+        onkeydown="if(event.key==='Enter'){window.commitPayField('${jsq(mo)}',${eid},'${jsq(name)}','${field}',${minVal},${maxV});}if(event.key==='Escape'){window.cancelPayField(${eid},'${jsq(mo)}','${jsq(name)}','${field}');}">
+      <button class="lf-btn-ok" onclick="window.commitPayField('${jsq(mo)}',${eid},'${jsq(name)}','${field}',${minVal},${maxV})" title="Confirm">✓</button>
+      <button class="lf-btn-cx" onclick="window.cancelPayField(${eid},'${jsq(mo)}','${jsq(name)}','${field}')" title="Cancel">✕</button>
+    </div>`;
+    const inp=document.getElementById(id+'-inp');
+    if(inp){ inp.focus(); inp.select(); }
+  };
+
+  /* ── Cancel edit (re-render to restore lock state) ── */
+  window.cancelPayField = function(eid, mo, name, field){
+    if(typeof renderPayroll==='function') renderPayroll();
+  };
+
+  /* ── Commit edit ── */
+  window.commitPayField = async function(mo, eid, name, field, minVal, maxVal){
+    const id=`lf-${eid}-${field}`;
+    const inp=document.getElementById(id+'-inp');
+    if(!inp) return;
+    let val=Number(inp.value);
+    if(!Number.isFinite(val)) val=0;
+    val=Math.max(minVal, Math.min(maxVal, val));
+    if(field==='advance'){
+      if(typeof setAdv==='function') await setAdv(mo, eid, name, val);
+    } else if(field==='old_balance' || field==='extra_allowance'){
+      if(typeof setPayrollAdjustment==='function') await setPayrollAdjustment(mo, eid, name, field, val);
+    }
+    if(typeof renderPayroll==='function') renderPayroll();
+  };
+
+  // Re-render after patch loads
+  setTimeout(()=>{
+    try{
+      if(document.getElementById('pg-payroll')?.classList.contains('active') && typeof renderPayroll==='function')
+        renderPayroll();
+    }catch(e){ console.warn('Enhanced payroll render skipped:',e); }
+  }, 350);
+})();
+</script>
+
+<!-- ══════════════════════════════════════════════════════════════
+     DEPARTMENT ADVANCE PATCH
+     Records a lump-sum advance paid to a department/contractor
+     (e.g. Mandeep gets an advance against his monthly payout).
+     Stored in localStorage key bgsg_department_monthly_adv_v1.
+     Shown as "Dept Adv Paid" column, deducted to show Remaining.
+══════════════════════════════════════════════════════════════ -->
+<script>
+(function(){
+  const ADV_KEY = 'bgsg_department_monthly_adv_v1';
+
+  /* ── storage helpers ── */
+  function getAdvStore(){ try{ return JSON.parse(localStorage.getItem(ADV_KEY)||'{}')||{}; }catch(e){ return {}; } }
+  function setAdvStore(o){ try{ localStorage.setItem(ADV_KEY, JSON.stringify(o||{})); }catch(e){} }
+  function getDeptAdv(month, dept){ const o=getAdvStore(); return Number((o[month]||{})[dept]||0); }
+  function setDeptAdv(month, dept, amount){
+    const o=getAdvStore();
+    if(!o[month]) o[month]={};
+    o[month][String(dept)] = Math.max(0, Number(amount||0));
+    setAdvStore(o);
+  }
+
+  /* ── helpers ── */
+  function n(v){ const x=Number(v); return Number.isFinite(x)?x:0; }
+  function money(v){ return '\u20b9'+Math.round(n(v)).toLocaleString('en-IN'); }
+  function esc(s){ return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+  function getDepts(){ return [...new Set((typeof EMPS!=='undefined'?EMPS:[]).map(e=>{ try{ return (typeof normalizeDepartment==='function')?normalizeDepartment(e.dept||e.department||'Unassigned'):String(e.dept||'Unassigned'); }catch(err){ return 'Unassigned'; } }))].filter(Boolean).sort(); }
+
+  /* ── populate advance dept select ── */
+  function populateAdvDeptSelect(month){
+    const sel = document.getElementById('dept-adv-dept');
+    if(!sel) return;
+    const depts = getDepts();
+    const prev = sel.value || depts.find(d=>/mandeep/i.test(d)) || depts[0] || '';
+    sel.innerHTML = depts.map(d=>`<option value="${esc(d)}"${d===prev?' selected':''}>${esc(d)}</option>`).join('');
+    if(!sel.value && depts[0]) sel.value = depts[0];
+    const amtEl = document.getElementById('dept-adv-amount');
+    if(amtEl && sel.value) amtEl.value = getDeptAdv(month, sel.value) || 0;
+    sel.onchange = function(){
+      const amtEl2 = document.getElementById('dept-adv-amount');
+      if(amtEl2) amtEl2.value = getDeptAdv(month, sel.value) || 0;
+    };
+  }
+
+  /* ── save from UI ── */
+  window.saveDepartmentAdvanceFromUI = function(){
+    const moEl = document.getElementById('dept-pay-month') || document.getElementById('pay-month');
+    const mo = moEl?.value || new Date().toISOString().slice(0,7);
+    const dept = document.getElementById('dept-adv-dept')?.value;
+    const amt  = Number(document.getElementById('dept-adv-amount')?.value || 0);
+    if(!dept){ if(typeof toast==='function') toast('Select a department first','err'); return; }
+    setDeptAdv(mo, dept, amt);
+    if(typeof renderDepartmentMonthlyPayout==='function') renderDepartmentMonthlyPayout(mo);
+    if(typeof toast==='function') toast('\u2713 Dept advance saved: ' + dept + ' \u20b9' + Math.round(amt).toLocaleString('en-IN') + ' for ' + mo, 'ok');
+  };
+
+  /* ── override renderDepartmentMonthlyPayout to add Dept Adv column ── */
+  const _prevRenderDeptPayout = window.renderDepartmentMonthlyPayout;
+  window.renderDepartmentMonthlyPayout = function(month){
+    const mo = month || document.getElementById('pay-month')?.value || new Date().toISOString().slice(0,7);
+
+    /* populate both selects */
+    populateAdvDeptSelect(mo);
+
+    /* if no previous render function, bail */
+    if(typeof _prevRenderDeptPayout !== 'function') return;
+
+    /* call original to populate base rows */
+    _prevRenderDeptPayout.call(this, mo);
+
+    /* now patch the tbody rows to add deptAdv column */
+    const tbody = document.getElementById('dept-payout-body');
+    const foot  = document.getElementById('dept-payout-foot');
+    const sum   = document.getElementById('dept-payout-summary');
+    if(!tbody) return;
+
+    /* re-compute rows with dept advance */
+    const foodPerEmp = (typeof mealTotalForMonth==='function' && typeof EMPS!=='undefined' && EMPS.length)
+      ? Math.round(mealTotalForMonth(mo) / EMPS.length) : 0;
+
+    /* gather per-dept data */
+    const rows = [];
+    if(typeof payrollAdvanceRows === 'function'){
+      const empDeptFn = e => {
+        try{ return (typeof normalizeDepartment==='function') ? normalizeDepartment(e.dept||e.department||'Unassigned') : String(e.dept||'Unassigned'); }
+        catch(_){ return 'Unassigned'; }
+      };
+      const groups = new Map();
+      payrollAdvanceRows(mo).forEach(r=>{
+        const dept = empDeptFn(r.emp||{});
+        if(!groups.has(dept)) groups.set(dept,{department:dept,employees:0,presentDays:0,otHours:0,salary:0,otAmount:0,oldBalance:0,extraAllowance:0,advance:0,netSalaryPayout:0,foodShare:0,rent:0,deptAdvance:0,remaining:0,totalDeptCost:0});
+        const g = groups.get(dept);
+        g.employees      += 1;
+        g.presentDays    += n(r.daysP);
+        g.otHours        += n(r.oth);
+        g.salary         += n(r.sal);
+        g.otAmount       += n(r.ota);
+        g.oldBalance     += n(r.oldBalance);
+        g.extraAllowance += n(r.extraAllowance);
+        g.advance        += n(r.adv);
+        g.netSalaryPayout+= n(r.net);
+        g.foodShare      += foodPerEmp;
+      });
+      groups.forEach((g, dept)=>{
+        const getRent = (typeof getDeptRent === 'function') ? getDeptRent : function(m,d){ try{ const RENT_KEY='bgsg_department_monthly_rent_v1'; const o=JSON.parse(localStorage.getItem(RENT_KEY)||'{}'); return Number((o[m]||{})[d]||0); }catch(e){ return 0; } };
+        g.rent        = getRent(mo, dept);
+        g.deptAdvance = getDeptAdv(mo, dept);
+        g.remaining   = g.netSalaryPayout - g.deptAdvance;
+        g.totalDeptCost = g.netSalaryPayout - g.deptAdvance + g.foodShare + g.rent;
+        g.otHours = Math.round(g.otHours * 100) / 100;
+        rows.push(g);
+      });
+      rows.sort((a,b)=>a.department.localeCompare(b.department));
+    }
+
+    if(!rows.length) return; /* leave original render output if no data */
+
+    /* build table rows */
+    tbody.innerHTML = rows.map(r=>`<tr>
+      <td style="font-weight:600">${esc(r.department)}</td>
+      <td class="mono">${r.employees}</td>
+      <td class="mono">${r.presentDays}</td>
+      <td class="mono">${r.otHours}</td>
+      <td class="mono">${money(r.salary)}</td>
+      <td class="mono ca">${r.otAmount<0?'-':''}${money(Math.abs(r.otAmount))}</td>
+      <td class="mono">${r.oldBalance<0?'-':''}${money(Math.abs(r.oldBalance))}</td>
+      <td class="mono cg">${money(r.extraAllowance)}</td>
+      <td class="mono ca">${money(r.advance)}</td>
+      <td class="mono" style="font-weight:600">${money(r.netSalaryPayout)}</td>
+      <td style="font-weight:600">
+        ${r.deptAdvance>0
+          ? `<span style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:6px;background:#fff7ed;border:1px solid #fed7aa;color:#b45309;font-family:'DM Mono',monospace;font-size:11px;white-space:nowrap">-${money(r.deptAdvance)} <button title="Clear dept advance for ${esc(r.department)}" onclick="window._clearDeptAdv('${esc(mo)}','${esc(r.department)}')" style="padding:1px 4px;border:none;border-radius:3px;background:#dc2626;color:#fff;cursor:pointer;font-size:9px;font-weight:700">&#10005;</button></span>`
+          : `<span style="color:var(--muted);font-size:11px">—</span>`
+        }
+      </td>
+      <td class="mono" style="font-weight:700;color:${r.remaining<0?'#dc2626':'#2563eb'}">${r.remaining<0?'-':''}${money(Math.abs(r.remaining))}</td>
+      <td class="mono cg">${money(r.foodShare)}</td>
+      <td class="mono cb">${money(r.rent)}</td>
+      <td class="mono" style="font-weight:700;color:${r.totalDeptCost<0?'#dc2626':'var(--accent)'}">
+        ${r.totalDeptCost<0?'-':''}${money(Math.abs(r.totalDeptCost))}
+      </td>
+    </tr>`).join('') || `<tr><td colspan="15" style="text-align:center;padding:20px;color:var(--muted)">No department data</td></tr>`;
+
+    /* footer totals */
+    const T = rows.reduce((a,b)=>{
+      Object.keys(a).forEach(k=>{ if(typeof b[k]==='number') a[k]+=b[k]; });
+      return a;
+    },{employees:0,presentDays:0,otHours:0,salary:0,otAmount:0,oldBalance:0,extraAllowance:0,advance:0,netSalaryPayout:0,deptAdvance:0,remaining:0,foodShare:0,rent:0,totalDeptCost:0});
+    T.otHours = Math.round(T.otHours*100)/100;
+    if(foot) foot.innerHTML=`
+      <td>Total</td>
+      <td>${T.employees}</td>
+      <td>${T.presentDays}</td>
+      <td>${T.otHours}</td>
+      <td>${money(T.salary)}</td>
+      <td>${T.otAmount<0?'-':''}${money(Math.abs(T.otAmount))}</td>
+      <td>${T.oldBalance<0?'-':''}${money(Math.abs(T.oldBalance))}</td>
+      <td>${money(T.extraAllowance)}</td>
+      <td>${money(T.advance)}</td>
+      <td style="font-weight:600">${money(T.netSalaryPayout)}</td>
+      <td style="color:#b45309;font-weight:600">${T.deptAdvance>0?'-'+money(T.deptAdvance):'—'}</td>
+      <td style="font-weight:700;color:#2563eb">${money(T.remaining)}</td>
+      <td>${money(T.foodShare)}</td>
+      <td>${money(T.rent)}</td>
+      <td style="font-weight:700;color:var(--accent)">${money(T.totalDeptCost)}</td>`;
+
+    /* summary mini-cards */
+    if(sum) sum.innerHTML=`
+      <div class="dept-mini-card"><div class="k">Departments</div><div class="v">${rows.length}</div><div class="s">monthly view</div></div>
+      <div class="dept-mini-card"><div class="k">Net Salary Payout</div><div class="v">${money(T.netSalaryPayout)}</div><div class="s">after emp advances</div></div>
+      <div class="dept-mini-card" style="border-color:#fed7aa;background:#fff7ed"><div class="k" style="color:#b45309">Dept Advance Paid</div><div class="v" style="color:#b45309">${money(T.deptAdvance)}</div><div class="s">lump-sum paid out</div></div>
+      <div class="dept-mini-card" style="border-color:#bfdbfe;background:#eff6ff"><div class="k" style="color:#1d4ed8">Remaining to Pay</div><div class="v" style="color:#1d4ed8">${money(T.remaining)}</div><div class="s">net minus dept adv</div></div>
+      <div class="dept-mini-card"><div class="k">Total Dept Cost</div><div class="v">${money(T.totalDeptCost)}</div><div class="s">remaining+food+rent</div></div>`;
+  };
+
+  /* ── quick clear button ── */
+  window._clearDeptAdv = function(mo, dept){
+    if(!confirm('Clear dept advance for ' + dept + ' in ' + mo + '?')) return;
+    setDeptAdv(mo, dept, 0);
+    if(typeof renderDepartmentMonthlyPayout==='function') renderDepartmentMonthlyPayout(mo);
+    if(typeof toast==='function') toast('Dept advance cleared for ' + dept, 'ok');
+  };
+
+  /* ── inform export about new column ── */
+  const _prevExportDeptPayout = window.exportDepartmentPayoutExcel;
+  window.exportDepartmentPayoutExcel = function(){
+    /* patch: if the original export exists, let it run, then we replace it */
+    const mo = document.getElementById('pay-month')?.value || new Date().toISOString().slice(0,7);
+    if(typeof payrollAdvanceRows !== 'function'){ if(typeof _prevExportDeptPayout==='function') _prevExportDeptPayout(); return; }
+    const foodPerEmp = (typeof mealTotalForMonth==='function' && typeof EMPS!=='undefined' && EMPS.length) ? Math.round(mealTotalForMonth(mo)/EMPS.length) : 0;
+    const empDeptFn = e => { try{ return (typeof normalizeDepartment==='function')?normalizeDepartment(e.dept||e.department||'Unassigned'):String(e.dept||'Unassigned'); }catch(_){ return 'Unassigned'; } };
+    const groups = new Map();
+    payrollAdvanceRows(mo).forEach(r=>{
+      const dept=empDeptFn(r.emp||{});
+      if(!groups.has(dept)) groups.set(dept,{department:dept,employees:0,presentDays:0,otHours:0,salary:0,otAmount:0,oldBalance:0,extraAllowance:0,advance:0,netSalaryPayout:0,deptAdvance:0,remaining:0,foodShare:0,rent:0,totalDeptCost:0});
+      const g=groups.get(dept);
+      g.employees+=1; g.presentDays+=n(r.daysP); g.otHours+=n(r.oth); g.salary+=n(r.sal);
+      g.otAmount+=n(r.ota); g.oldBalance+=n(r.oldBalance); g.extraAllowance+=n(r.extraAllowance);
+      g.advance+=n(r.adv); g.netSalaryPayout+=n(r.net); g.foodShare+=foodPerEmp;
+    });
+    groups.forEach((g,dept)=>{
+      const getRent=(typeof getDeptRent==='function')?getDeptRent:function(m,d){try{const o=JSON.parse(localStorage.getItem('bgsg_department_monthly_rent_v1')||'{}');return Number((o[m]||{})[d]||0);}catch(e){return 0;}};
+      g.rent=getRent(mo,dept); g.deptAdvance=getDeptAdv(mo,dept);
+      g.remaining=g.netSalaryPayout-g.deptAdvance;
+      g.totalDeptCost=g.remaining+g.foodShare+g.rent;
+      g.otHours=Math.round(g.otHours*100)/100;
+    });
+    const exportRows=[...groups.values()].sort((a,b)=>a.department.localeCompare(b.department)).map(r=>({
+      'Department': r.department,
+      'Employees': r.employees,
+      'Present Days': r.presentDays,
+      'OT Hours': r.otHours,
+      'Salary Amount': Math.round(r.salary),
+      'OT Amount': Math.round(r.otAmount),
+      'Old Balance / Adjustment': Math.round(r.oldBalance),
+      'Extra Allowance': Math.round(r.extraAllowance),
+      'Employee Advances': Math.round(r.advance),
+      'Net Salary Payout': Math.round(r.netSalaryPayout),
+      'Dept Advance Paid': Math.round(r.deptAdvance),
+      'Remaining to Pay': Math.round(r.remaining),
+      'Food Share': Math.round(r.foodShare),
+      'Department Rent': Math.round(r.rent),
+      'Total Dept Cost': Math.round(r.totalDeptCost)
+    }));
+    if(!window.XLSX){ if(typeof toast==='function') toast('Excel library not loaded','err'); return; }
+    const ws=XLSX.utils.json_to_sheet(exportRows);
+    ws['!cols']=[{wch:18},{wch:10},{wch:12},{wch:10},{wch:14},{wch:12},{wch:22},{wch:16},{wch:18},{wch:18},{wch:18},{wch:16},{wch:14},{wch:16},{wch:18}];
+    const wb=XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Dept Payout '+mo);
+    XLSX.writeFile(wb, 'Department_Payout_'+mo+'.xlsx');
+    if(typeof toast==='function') toast('Exported department payout with dept advances', 'ok');
+  };
+
+  /* ── hook into Dept Payout page navigation ── */
+  const _prevGoTo = window.goTo;
+  if(typeof _prevGoTo === 'function'){
+    window.goTo = function(page, el){
+      _prevGoTo.call(this, page, el);
+      if(page === 'deptpayroll'){
+        setTimeout(()=>{
+          try{
+            const mo = document.getElementById('dept-pay-month')?.value || document.getElementById('pay-month')?.value || new Date().toISOString().slice(0,7);
+            populateAdvDeptSelect(mo);
+          }catch(e){}
+        }, 100);
+      }
+    };
+  }
+
+  /* ── also populate on any renderDeptPayout call ── */
+  setTimeout(()=>{
+    try{
+      const mo = document.getElementById('pay-month')?.value || new Date().toISOString().slice(0,7);
+      populateAdvDeptSelect(mo);
+    }catch(e){}
+  }, 600);
+
+})();
+</script>
+
+</body>
+</html>
+<!-- ══════════════════════════════════════════════════════════════
+     DEPT ADVANCE — FINAL RENDER OVERRIDE (1100ms)
+     Runs AFTER the compact renderer (900ms), injects Dept Adv Paid
+     column + updates stat cards with correct Remaining to Pay.
+══════════════════════════════════════════════════════════════ -->
+<script>
+(function(){
+  const ADV_KEY2 = 'bgsg_department_monthly_adv_v1';
+  function getAdv2(month, dept){ try{ return Number((JSON.parse(localStorage.getItem(ADV_KEY2)||'{}')[month]||{})[String(dept)]||0); }catch(e){ return 0; } }
+  function toN2(v){ const n=Number(v); return Number.isFinite(n)?n:0; }
+  function rupee2(v){ return '\u20b9'+(typeof fmt==='function'?fmt(Math.round(toN2(v))):Math.round(toN2(v)).toLocaleString('en-IN')); }
+  function esc2(s){ return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+  function deptOf2(emp){ try{ return (typeof normalizeDepartment==='function')?normalizeDepartment(emp?.dept||emp?.department||'Unassigned'):String(emp?.dept||'Unassigned').trim()||'Unassigned'; }catch(e){ return 'Unassigned'; } }
+  function getMonthStr(){ const dm=document.getElementById('dept-pay-month'); const pm=document.getElementById('pay-month'); return (dm&&dm.value)||(pm&&pm.value)||new Date().toISOString().slice(0,7); }
+  function getRentVal(mo,dept){ try{ return Number((JSON.parse(localStorage.getItem('bgsg_department_monthly_rent_v1')||'{}')[mo]||{})[dept]||0); }catch(e){ return 0; } }
+
+  function patchDeptAdvView(mo){
+    const mo2 = mo || getMonthStr();
+    /* ensure the advance dept select is populated */
+    const advSel=document.getElementById('dept-adv-dept');
+    if(advSel && !advSel.options.length){
+      const depts=[...new Set((typeof EMPS!=='undefined'?EMPS:[]).map(deptOf2))].filter(Boolean).sort();
+      const prev=advSel.value||depts.find(d=>/mandeep/i.test(d))||depts[0]||'';
+      advSel.innerHTML=depts.map(d=>`<option value="${esc2(d)}">${esc2(d)}</option>`).join('');
+      if(depts.includes(prev)) advSel.value=prev; else if(depts[0]) advSel.value=depts[0];
+      const amtEl=document.getElementById('dept-adv-amount'); if(amtEl) amtEl.value=getAdv2(mo2,advSel.value)||0;
+    }
+
+    const table=document.querySelector('#dept-month-payout-card table.payroll-dept-table');
+    if(!table) return;
+
+    /* ── patch thead ── */
+    const thead=table.querySelector('thead tr');
+    if(thead && !thead.querySelector('.dept-adv-th2')){
+      const totalTh=thead.lastElementChild;
+      const th=document.createElement('th');
+      th.className='dept-adv-th2';
+      th.style.cssText='width:140px;text-align:right;background:#fff7ed!important;color:#9a3412!important;border-left:2px solid #fed7aa;';
+      th.innerHTML='Dept Adv Paid \u20b9';
+      thead.insertBefore(th, totalTh);
+    }
+
+    /* ── rebuild tbody ── */
+    const empRows=(typeof payrollAdvanceRows==='function')?payrollAdvanceRows(mo2):[];
+    const selectedFilter=(document.getElementById('dept-filter')?.value)||'ALL';
+    const gMap=new Map();
+    empRows.forEach(r=>{
+      const dept=deptOf2(r.emp||{});
+      if(!gMap.has(dept)) gMap.set(dept,{employees:0,days:0,otHrs:0,basic:0,salary:0,otAmount:0,advance:0,netPayable:0,children:[]});
+      const g=gMap.get(dept);
+      g.employees++; g.days+=toN2(r.daysP); g.otHrs+=toN2(r.oth);
+      g.basic+=toN2((r.emp||{}).salary); g.salary+=toN2(r.sal); g.otAmount+=toN2(r.ota);
+      g.advance+=toN2(r.adv); g.netPayable+=toN2(r.net);
+      g.children.push({name:(r.emp||{}).name||'',position:(r.emp||{}).position||(r.emp||{}).pos||'Employee',days:toN2(r.daysP),otHrs:toN2(r.oth),basic:toN2((r.emp||{}).salary),salary:toN2(r.sal),otAmount:toN2(r.ota),netPayable:toN2(r.net)});
+    });
+    const allGs=[...gMap.entries()].map(([dept,g])=>({...g,department:dept,otHrs:Math.round(g.otHrs*100)/100,rent:getRentVal(mo2,dept),deptAdv:getAdv2(mo2,dept),remaining:g.netPayable-getAdv2(mo2,dept),total:g.netPayable+getRentVal(mo2,dept)})).sort((a,b)=>a.department.localeCompare(b.department));
+    const gs=selectedFilter==='ALL'?allGs:allGs.filter(g=>g.department===selectedFilter);
+    if(!gs.length) return;
+
+    const html=[];
+    gs.forEach(g=>{
+      /* dept group header */
+      const advCellH=g.deptAdv>0
+        ? `<td style="text-align:right;background:#fff7ed;border-left:2px solid #fed7aa"><span style="display:inline-flex;align-items:center;gap:3px;color:#b45309;font-weight:700;font-family:'DM Mono',monospace;font-size:11px">${rupee2(g.deptAdv)}<button onclick="window._clearDeptAdv2('${esc2(mo2)}','${esc2(g.department)}')" style="padding:0 3px;border:none;border-radius:3px;background:#dc2626;color:#fff;cursor:pointer;font-size:9px;line-height:1.5">&#10005;</button></span></td>`
+        : `<td style="text-align:right;color:var(--muted);border-left:2px solid #fed7aa">&mdash;</td>`;
+      html.push(`<tr class="dept-group-row"><td>&#127991; ${esc2(g.department)}</td><td class="mono">${g.days}</td><td class="mono">${g.otHrs}</td><td class="mono">${rupee2(g.basic)}</td><td class="mono">${rupee2(g.salary)}</td><td class="mono ${g.otAmount<0?'cr':'ca'}">${g.otAmount<0?'-':''}${rupee2(Math.abs(g.otAmount))}</td><td class="mono">${rupee2(g.netPayable)}</td><td class="mono cb">${rupee2(g.rent)}</td>${advCellH}<td class="mono" style="color:var(--accent)">${rupee2(g.total)}</td></tr>`);
+      /* employee rows */
+      g.children.forEach(r=>{
+        html.push(`<tr class="dept-emp-row"><td><span class="dept-emp-name">${esc2(r.name)}</span><span class="dept-emp-sub">${esc2(r.position)}</span></td><td class="mono">${r.days}</td><td class="mono">${Math.round(r.otHrs*100)/100}</td><td class="mono">${rupee2(r.basic)}</td><td class="mono">${rupee2(r.salary)}</td><td class="mono ${r.otAmount<0?'cr':'ca'}">${r.otAmount<0?'-':''}${rupee2(Math.abs(r.otAmount))}</td><td class="mono">${rupee2(r.netPayable)}</td><td class="mono cm">&mdash;</td><td class="mono cm" style="border-left:2px solid #fed7aa">&mdash;</td><td class="mono">${rupee2(r.netPayable)}</td></tr>`);
+      });
+      /* dept total */
+      const advCellT=g.deptAdv>0
+        ? `<td style="font-weight:700;color:#b45309;text-align:right;border-left:2px solid #fed7aa">-${rupee2(g.deptAdv)}</td>`
+        : `<td style="color:var(--muted);text-align:right;border-left:2px solid #fed7aa">&mdash;</td>`;
+      const remColor=g.remaining<0?'color:#dc2626':'color:#1d4ed8';
+      html.push(`<tr class="dept-total-row"><td>${esc2(g.department)} Total (${g.employees} emp)</td><td>${g.days}</td><td>${g.otHrs}</td><td>${rupee2(g.basic)}</td><td>${rupee2(g.salary)}</td><td>${g.otAmount<0?'-':''}${rupee2(Math.abs(g.otAmount))}</td><td>${rupee2(g.netPayable)}</td><td>${rupee2(g.rent)}</td>${advCellT}<td style="font-weight:700;${remColor}">${rupee2(g.remaining)}</td></tr>`);
+    });
+    const tbody=document.getElementById('dept-payout-body');
+    if(tbody) tbody.innerHTML=html.join('');
+
+    /* ── update footer ── */
+    const T=gs.reduce((a,g)=>{a.employees+=g.employees;a.days+=g.days;a.otHrs+=g.otHrs;a.basic+=g.basic;a.salary+=g.salary;a.otAmount+=g.otAmount;a.advance+=g.advance;a.netPayable+=g.netPayable;a.rent+=g.rent;a.deptAdv+=g.deptAdv;a.remaining+=g.remaining;a.total+=g.total;return a;},{employees:0,days:0,otHrs:0,basic:0,salary:0,otAmount:0,advance:0,netPayable:0,rent:0,deptAdv:0,remaining:0,total:0});
+    T.otHrs=Math.round(T.otHrs*100)/100;
+    const foot=document.getElementById('dept-payout-foot');
+    if(foot) foot.innerHTML=`<td>${selectedFilter==='ALL'?`Total (${T.employees} emp)`:esc2(selectedFilter+' Total')}</td><td>${T.days}</td><td>${T.otHrs}</td><td>${rupee2(T.basic)}</td><td>${rupee2(T.salary)}</td><td>${T.otAmount<0?'-':''}${rupee2(Math.abs(T.otAmount))}</td><td>${rupee2(T.netPayable)}</td><td>${rupee2(T.rent)}</td><td style="color:#b45309;font-weight:700;border-left:2px solid #fed7aa">${T.deptAdv>0?'-'+rupee2(T.deptAdv):'&mdash;'}</td><td style="font-weight:700;color:#1d4ed8">${rupee2(T.remaining)}</td>`;
+
+    /* ── update stat cards ── */
+    const titleLabel=selectedFilter==='ALL'?'All Departments':selectedFilter;
+    const sum=document.getElementById('dept-payout-summary');
+    if(sum) sum.innerHTML=`
+      <div class="dept-mini-card ${selectedFilter!=='ALL'?'is-active':''}"><div class="k">Total Employee Count</div><div class="v">${T.employees}</div><div class="s">${esc2(titleLabel)} view</div></div>
+      <div class="dept-mini-card"><div class="k">Salary Amount</div><div class="v">${rupee2(T.salary)}</div><div class="s">payable salary total</div></div>
+      <div class="dept-mini-card"><div class="k">OT Amount</div><div class="v">${T.otAmount<0?'-':''}${rupee2(Math.abs(T.otAmount))}</div><div class="s">overtime impact</div></div>
+      <div class="dept-mini-card"><div class="k">Rent Amount</div><div class="v">${rupee2(T.rent)}</div><div class="s">department rent</div></div>
+      <div class="dept-mini-card" style="border-color:#fed7aa!important;background:linear-gradient(180deg,#fff7ed,#ffedd5)!important"><div class="k" style="color:#9a3412">Dept Adv Paid</div><div class="v" style="color:#b45309">${rupee2(T.deptAdv)}</div><div class="s">lump-sum to contractor</div></div>
+      <div class="dept-mini-card" style="border-color:#bfdbfe!important;background:linear-gradient(180deg,#eff6ff,#dbeafe)!important"><div class="k" style="color:#1e40af">Remaining to Pay</div><div class="v" style="color:#1d4ed8">${rupee2(T.remaining)}</div><div class="s">net payable \u2212 dept adv</div></div>`;
+  }
+
+  /* clear helper */
+  window._clearDeptAdv2=function(mo,dept){
+    if(!confirm('Clear dept advance for '+dept+' in '+mo+'?')) return;
+    try{ const o=JSON.parse(localStorage.getItem(ADV_KEY2)||'{}'); if(o[mo]) delete o[mo][dept]; localStorage.setItem(ADV_KEY2,JSON.stringify(o)); }catch(e){}
+    const amtEl=document.getElementById('dept-adv-amount');
+    if(amtEl && document.getElementById('dept-adv-dept')?.value===dept) amtEl.value=0;
+    if(typeof renderDepartmentMonthlyPayout==='function') renderDepartmentMonthlyPayout(mo);
+  };
+
+  /* also keep the existing save button working */
+  window.saveDepartmentAdvanceFromUI=function(){
+    const mo=getMonthStr();
+    const dept=document.getElementById('dept-adv-dept')?.value;
+    const amt=Number(document.getElementById('dept-adv-amount')?.value||0);
+    if(!dept){ if(typeof toast==='function') toast('Select a department first','err'); return; }
+    try{ const o=JSON.parse(localStorage.getItem(ADV_KEY2)||'{}'); if(!o[mo]) o[mo]={}; o[mo][String(dept)]=Math.max(0,amt); localStorage.setItem(ADV_KEY2,JSON.stringify(o)); }catch(e){}
+    if(typeof renderDepartmentMonthlyPayout==='function') renderDepartmentMonthlyPayout(mo);
+    if(typeof toast==='function') toast('\u2713 Dept advance saved: '+dept+' \u20b9'+Math.round(amt).toLocaleString('en-IN')+' for '+mo,'ok');
+  };
+
+  /* override renderDepartmentMonthlyPayout to always patch after compact renders */
+  const _prevFinal=window.renderDepartmentMonthlyPayout;
+  window.renderDepartmentMonthlyPayout=async function(month){
+    if(typeof _prevFinal==='function') await _prevFinal.call(this,month);
+    setTimeout(()=>{ try{ patchDeptAdvView(month||getMonthStr()); }catch(e){ console.warn('DeptAdv patch:',e); } }, 50);
+  };
+
+  /* initial run at 1100ms — after compact (900ms) */
+  setTimeout(()=>{ try{ patchDeptAdvView(); }catch(e){ console.warn('DeptAdv initial patch:',e); } }, 1100);
+  /* and again at 1600ms to ensure it sticks */
+  setTimeout(()=>{ try{ patchDeptAdvView(); }catch(e){} }, 1600);
+})();
+</script>
 </body>
 </html>
