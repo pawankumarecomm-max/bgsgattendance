@@ -357,19 +357,19 @@ label{font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:var(--mu
           <thead><tr>
             <th style="width:32px"><input type="checkbox" id="pay-chk-all" onchange="payrollSelectAll(this.checked)" title="Select all"></th>
             <th>#</th>
-            <th style="min-width:130px">Name</th>
-            <th>Department</th>
-            <th>Salary (₹)</th>
+            <th style="min-width:135px">Name</th>
+            <th>Dept</th>
+            <th>Salary</th>
             <th>Shift</th>
             <th>Days</th>
             <th>OT Hrs</th>
-            <th>Salary Amt (₹)</th>
-            <th>OT Amt (₹)</th>
-            <th>Advance (₹)</th>
-            <th>Old Bal / Adj. (₹)</th>
-            <th>Extra Allow. (₹)</th>
-            <th>Net Pay (₹)</th>
-            <th style="min-width:120px">Remarks</th>
+            <th>Salary</th>
+            <th>OT ₹</th>
+            <th>Advance</th>
+            <th>Old Bal</th>
+            <th>Allow.</th>
+            <th>Net</th>
+            <th style="min-width:80px">Note</th>
           </tr></thead>
           <tbody id="pay-tbody"></tbody>
           <tfoot><tr class="tfr" id="pay-tfoot"><td colspan="15" style="text-align:center;color:var(--muted);padding:10px">Select month above</td></tr></tfoot>
@@ -806,7 +806,7 @@ function attRow(r){
   });
 }
 function advRow(r){
-  return cleanRow({
+  const row = {
     id: r.id !== undefined && r.id !== null && r.id !== '' ? num(r.id) : undefined,
     employee_id: num(r.employee_id),
     employee_name: String(r.employee_name || '').trim(),
@@ -814,7 +814,11 @@ function advRow(r){
     amount: num(r.amount),
     old_balance: num(r.old_balance),
     extra_allowance: num(r.extra_allowance)
-  });
+  };
+  // Payroll V2 fields: salary can vary by month and actual paid amount creates next-month carry-forward.
+  if(Object.prototype.hasOwnProperty.call(r,'salary_override')) row.salary_override = (r.salary_override === '' || r.salary_override === null || r.salary_override === undefined) ? null : num(r.salary_override);
+  if(Object.prototype.hasOwnProperty.call(r,'paid_amount')) row.paid_amount = (r.paid_amount === '' || r.paid_amount === null || r.paid_amount === undefined) ? null : num(r.paid_amount);
+  return cleanRow(row);
 }
 function snackRow(r){
   return {
@@ -991,7 +995,10 @@ function buildCacheSnapshot(){
     attendance: Object.entries(ATTS).flatMap(([date,dayA])=>
       Object.entries(dayA).map(([eid,r])=>({employee_id:+eid,date,...r,ot_hours:r.ot,total_hours:r.hrs}))),
     advances: Object.entries(ADVS).flatMap(([mo,mo_])=>
-      Object.entries(mo_).map(([eid,amt])=>({employee_id:+eid,month:mo,amount:amt}))),
+      Object.entries(mo_).map(([eid,rec])=>{
+        const a = (typeof normalizeAdvanceRecord==='function') ? normalizeAdvanceRecord(rec) : (rec||{});
+        return {employee_id:+eid,month:mo,amount:num(a.amount),old_balance:num(a.old_balance),extra_allowance:num(a.extra_allowance),salary_override:(a.salary_override===null||a.salary_override===undefined?'':num(a.salary_override)),paid_amount:(a.paid_amount===null||a.paid_amount===undefined?'':num(a.paid_amount))};
+      })),
     snacks: {morning:SNK.tea,snacks:SNK.snacks,evening:SNK.dinner}
   };
 }
@@ -1074,7 +1081,7 @@ async function syncDatasetToCloud(data){
     await gasGet({action:'saveAttendance', rows:attRows.slice(i,i+400)});
   }
   for(const row of advRows){
-    await gasGet({action:'saveAdvance', employee_id:row.employee_id, employee_name:row.employee_name || '', month:row.month, amount:row.amount});
+    await gasGet({action:'saveAdvance', employee_id:row.employee_id, employee_name:row.employee_name || '', month:row.month, amount:row.amount, old_balance:row.old_balance, extra_allowance:row.extra_allowance, salary_override:row.salary_override, paid_amount:row.paid_amount});
   }
   if(dataset.snacks){
     await gasGet({action:'saveSnacks', morning:dataset.snacks.morning, snacks:dataset.snacks.snacks, evening:dataset.snacks.evening});
@@ -1144,7 +1151,9 @@ function parseAll(data) {
     ADVS[mo][+r.employee_id]={
       amount:+r.amount||0,
       old_balance:+r.old_balance||0,
-      extra_allowance:+r.extra_allowance||0
+      extra_allowance:+r.extra_allowance||0,
+      salary_override:(r.salary_override===null || r.salary_override===undefined || r.salary_override==='') ? null : (+r.salary_override||0),
+      paid_amount:(r.paid_amount===null || r.paid_amount===undefined || r.paid_amount==='') ? null : (+r.paid_amount||0)
     };
   });
 
@@ -1481,10 +1490,12 @@ function normalizeAdvanceRecord(v){
     return {
       amount: num(v.amount),
       old_balance: num(v.old_balance),
-      extra_allowance: num(v.extra_allowance)
+      extra_allowance: num(v.extra_allowance),
+      salary_override:(v.salary_override===null || v.salary_override===undefined || v.salary_override==='') ? null : num(v.salary_override),
+      paid_amount:(v.paid_amount===null || v.paid_amount===undefined || v.paid_amount==='') ? null : num(v.paid_amount)
     };
   }
-  return {amount:num(v), old_balance:0, extra_allowance:0};
+  return {amount:num(v), old_balance:0, extra_allowance:0, salary_override:null, paid_amount:null};
 }
 function setAdvanceRecord(mo,eid,patch){
   if(!ADVS[mo]) ADVS[mo]={};
@@ -3246,12 +3257,23 @@ boot();
         employee_name: String(params.employee_name || '').trim(),
         month: String(params.month || '').trim(),
         amount: num(params.amount),
+        old_balance: num(params.old_balance),
+        extra_allowance: num(params.extra_allowance),
+        salary_override: (params.salary_override === null || params.salary_override === undefined || params.salary_override === '') ? null : num(params.salary_override),
+        paid_amount: (params.paid_amount === null || params.paid_amount === undefined || params.paid_amount === '') ? null : num(params.paid_amount),
         unit_name: normalizeUnit(params.unit_name || params.unit || DEFAULT_UNIT)
       });
 
       try{
         await sb(getSupabase().from(TABLES.ADV).upsert([row], { onConflict:'employee_id,month' }), 'Save advance');
       }catch(upsertErr){
+        const msg = String(upsertErr && upsertErr.message ? upsertErr.message : upsertErr);
+        if(/old_balance|extra_allowance|salary_override|paid_amount|schema cache|column/i.test(msg)){
+          const basic = {...row};
+          delete basic.old_balance; delete basic.extra_allowance; delete basic.salary_override; delete basic.paid_amount;
+          await sb(getSupabase().from(TABLES.ADV).upsert([basic], { onConflict:'employee_id,month' }), 'Save advance amount');
+          throw new Error('Saved basic advance only. Add old_balance, extra_allowance, salary_override and paid_amount columns in Supabase for full payroll sync.');
+        }
         // Fallback for older Supabase tables where UNIQUE(employee_id, month) was not created.
         const existing = await sb(
           getSupabase().from(TABLES.ADV)
@@ -7948,6 +7970,335 @@ boot();
 })();
 </script>
 
+
+
+<!-- ══════════════════════════════════════════════════════════════
+     PAYROLL V2 PATCH
+     • Month-wise salary revision with previous-month default
+     • Paid amount entry and automatic next-month old balance
+     • Example: Net ₹9,340 paid ₹10,000 → next month old balance -₹660
+══════════════════════════════════════════════════════════════ -->
+<style id="payroll-v2-style">
+  #pg-payroll .pay-v2-note{display:inline-flex;align-items:center;gap:6px;font-size:10px;color:#92400e;background:#fffbeb;border:1px solid #fde68a;border-radius:999px;padding:4px 9px;font-weight:600}
+  #pg-payroll .pay-v2-pill{display:inline-flex;align-items:center;gap:5px;padding:3px 8px;border-radius:6px;border:1px solid #e5e7eb;background:#f9fafb;font-family:'DM Mono',monospace;font-size:11px;font-weight:600;white-space:nowrap}
+  #pg-payroll .pay-v2-pill.salary{background:#eef2ff;border-color:#c7d2fe;color:#4338ca}
+  #pg-payroll .pay-v2-pill.paid{background:#ecfeff;border-color:#a5f3fc;color:#0e7490}
+  #pg-payroll .pay-v2-pill.next-pos{background:#eff6ff;border-color:#bfdbfe;color:#1d4ed8}
+  #pg-payroll .pay-v2-pill.next-neg{background:#fef2f2;border-color:#fecaca;color:#b91c1c}
+  #pg-payroll .pay-v2-pill.next-zero{background:#f0fdf4;border-color:#bbf7d0;color:#15803d}
+  #pg-payroll .pay-v2-edit{display:inline-flex;align-items:center;gap:4px}
+  #pg-payroll .pay-v2-edit input{width:88px;font-size:11px;padding:3px 6px;border-radius:5px;border:2px solid #f59e0b;background:#fffbeb;font-family:'DM Mono',monospace;outline:none}
+  #pg-payroll .pay-v2-ok,#pg-payroll .pay-v2-cx{border:none;border-radius:4px;padding:2px 7px;font-size:11px;font-weight:700;cursor:pointer;color:#fff}
+  #pg-payroll .pay-v2-ok{background:#16a34a} #pg-payroll .pay-v2-cx{background:#dc2626}
+  #pg-payroll .pay-v2-ico{font-size:10px;cursor:pointer;padding:1px 3px;border-radius:3px;color:#6b7280}
+  #pg-payroll .pay-v2-ico:hover{background:#fef3c7;color:#b45309}
+</style>
+<script id="payroll-v2-script">
+(function(){
+  const STORE_KEY='bgsg_payroll_v2_fields_v1';
+  const n=v=>{const x=Number(v); return Number.isFinite(x)?x:0;};
+  const fmt=v=>Math.round(n(v)).toLocaleString('en-IN');
+  const money=v=>n(v)<0?'-₹'+fmt(Math.abs(n(v))):'₹'+fmt(v);
+  const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const jsq=s=>String(s??'').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+  const has=(o,k)=>Object.prototype.hasOwnProperty.call(o||{},k);
+  function getStore(){try{return JSON.parse(localStorage.getItem(STORE_KEY)||'{}')||{};}catch(_){return {};}}
+  function setStore(o){try{localStorage.setItem(STORE_KEY,JSON.stringify(o||{}));}catch(_){}}
+  function monthAdd(mo,delta){
+    if(!/^\d{4}-\d{2}$/.test(String(mo||''))) return mo;
+    const y=Number(mo.slice(0,4)), m=Number(mo.slice(5,7))-1+delta;
+    const d=new Date(y,m,1);
+    return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+  }
+  function normRec(v){
+    if(typeof window.normalizeAdvanceRecord==='function'){
+      const r=window.normalizeAdvanceRecord(v);
+      return {amount:n(r.amount),old_balance:n(r.old_balance),extra_allowance:n(r.extra_allowance),salary_override:(r.salary_override===null||r.salary_override===undefined||r.salary_override==='')?null:n(r.salary_override),paid_amount:(r.paid_amount===null||r.paid_amount===undefined||r.paid_amount==='')?null:n(r.paid_amount)};
+    }
+    v=v||{}; return {amount:n(v.amount),old_balance:n(v.old_balance),extra_allowance:n(v.extra_allowance),salary_override:(v.salary_override===null||v.salary_override===undefined||v.salary_override==='')?null:n(v.salary_override),paid_amount:(v.paid_amount===null||v.paid_amount===undefined||v.paid_amount==='')?null:n(v.paid_amount)};
+  }
+  function storeRec(mo,eid){return normRec(((getStore()[mo]||{})[eid])||{});}
+  function advRec(mo,eid){
+    const cloud=normRec(((ADVS||{})[mo]||{})[eid]);
+    const local=storeRec(mo,eid);
+    return {
+      amount: has(((ADVS||{})[mo]||{}),eid)?cloud.amount:local.amount,
+      old_balance: has(((ADVS||{})[mo]||{}),eid)?cloud.old_balance:local.old_balance,
+      extra_allowance: has(((ADVS||{})[mo]||{}),eid)?cloud.extra_allowance:local.extra_allowance,
+      salary_override: cloud.salary_override!==null?cloud.salary_override:local.salary_override,
+      paid_amount: cloud.paid_amount!==null?cloud.paid_amount:local.paid_amount
+    };
+  }
+  function setRec(mo,eid,patch){
+    if(!ADVS[mo]) ADVS[mo]={};
+    const next={...advRec(mo,eid),...patch};
+    ADVS[mo][eid]=next;
+    const st=getStore(); if(!st[mo]) st[mo]={}; st[mo][eid]=next; setStore(st);
+    return next;
+  }
+  function mergeLocalStore(){
+    const st=getStore();
+    Object.entries(st).forEach(([mo,rows])=>{
+      if(!ADVS[mo]) ADVS[mo]={};
+      Object.entries(rows||{}).forEach(([eid,rec])=>{
+        ADVS[mo][eid]={...normRec(ADVS[mo][eid]),...normRec(rec)};
+      });
+    });
+  }
+  function effectiveSalary(emp,mo){
+    const cur=advRec(mo,emp.id);
+    if(cur.salary_override!==null && cur.salary_override>0) return cur.salary_override;
+    let scan=mo;
+    for(let i=0;i<120;i++){
+      scan=monthAdd(scan,-1);
+      const r=advRec(scan,emp.id);
+      if(r.salary_override!==null && r.salary_override>0) return r.salary_override;
+    }
+    return n(emp.salary);
+  }
+  function payrollRows(mo){
+    mergeLocalStore();
+    return (Array.isArray(EMPS)?EMPS:[]).map(emp=>{
+      let daysP=0,oth=0;
+      const shift=Number(emp.shift||8);
+      (typeof daInMo==='function'?daInMo(mo):Object.entries(ATTS||{}).filter(([d])=>d.startsWith(mo))).forEach(([,dayA])=>{
+        const r=dayA[emp.id]; if(!r) return;
+        if(r.status==='P') daysP++;
+        if(r.status!=='H'){
+          const hrs=n(r.hrs);
+          if(hrs>0){
+            const calc=(shift===8)?(hrs-8):(shift===12?(hrs-12):(hrs-shift));
+            oth+=Math.round(calc*100)/100;
+          }
+        }
+      });
+      const salary=effectiveSalary(emp,mo);
+      const sal=Math.round((typeof salaryPerDay==='function'?salaryPerDay(salary,mo):salary/(typeof daysInMonth==='function'?daysInMonth(mo):30))*daysP);
+      const ota=Math.round((typeof otRatePerHour==='function'?otRatePerHour(salary,mo,shift):(salary/(typeof daysInMonth==='function'?daysInMonth(mo):30)/(shift||1)))*oth);
+      const rec=advRec(mo,emp.id);
+      const maxAdvance=Math.round(salary*0.5);
+      const adv=Math.min(Math.max(n(rec.amount),0),maxAdvance);
+      const oldBalance=n(rec.old_balance);
+      const extraAllowance=Math.max(0,n(rec.extra_allowance));
+      const net=sal+ota+oldBalance+extraAllowance-adv;
+      const paidAmount=(rec.paid_amount===null||rec.paid_amount===undefined)?null:n(rec.paid_amount);
+      const nextBalance=paidAmount===null?null:Math.round(net-paidAmount);
+      return {emp:{...emp,salary:salary,master_salary:emp.salary},daysP,oth:Math.round(oth*100)/100,sal,ota,payable:sal+ota,maxAdvance,adv,oldBalance,extraAllowance,net,paidAmount,nextBalance,monthSalary:salary,bank:String(emp.bank_account_no||''),ifsc:String(emp.ifsc_code||'').toUpperCase()};
+    });
+  }
+  window.payrollAdvanceRows=payrollRows;
+  async function saveCloud(mo,eid,name,rec,unit){
+    const payload={action:'saveAdvance',employee_id:eid,employee_name:name,month:mo,amount:n(rec.amount),old_balance:n(rec.old_balance),extra_allowance:n(rec.extra_allowance),salary_override:rec.salary_override,paid_amount:rec.paid_amount,unit_name:unit};
+    try{
+      if(typeof gasGet==='function') return await gasGet(payload);
+    }catch(e){
+      const msg=String(e&&e.message?e.message:e);
+      if(/salary_override|paid_amount|old_balance|extra_allowance|column|schema cache/i.test(msg)){
+        console.warn('Payroll V2 cloud schema missing columns:',msg);
+        throw new Error('Saved locally. Run the Payroll V2 SQL in Supabase so month salary / paid amount sync permanently.');
+      }
+      throw e;
+    }
+  }
+  function autoRefresh(mo){
+    if(typeof renderPayroll==='function') renderPayroll();
+    if(typeof renderDepartmentMonthlyPayout==='function') renderDepartmentMonthlyPayout(mo);
+  }
+  window.setPayrollV2Field=async function(mo,eid,name,field,val){
+    const emp=(Array.isArray(EMPS)?EMPS:[]).find(e=>Number(e.id)===Number(eid))||{};
+    const unit=emp.unit || window.LIVE_STATE?.currentUser?.unit || window.DEFAULT_UNIT || 'Jhajjar Unit 1';
+    const rec=advRec(mo,eid);
+    let patch={};
+    if(field==='salary_override') patch.salary_override=Math.max(0,n(val));
+    else if(field==='paid_amount') patch.paid_amount=n(val);
+    else if(field==='advance') patch.amount=Math.min(Math.max(0,n(val)), Math.round(effectiveSalary(emp,mo)*0.5));
+    else if(field==='old_balance') patch.old_balance=n(val);
+    else if(field==='extra_allowance') patch.extra_allowance=Math.max(0,n(val));
+    else return;
+    const next=setRec(mo,eid,patch);
+    // If current paid amount exists, refresh next-month carry whenever salary/advance/old/allowance/payment changes.
+    const row=payrollRows(mo).find(r=>Number(r.emp.id)===Number(eid));
+    if(row && row.paidAmount!==null){
+      const nextMo=monthAdd(mo,1);
+      const cf=Math.round(n(row.net)-n(row.paidAmount));
+      const nextRec=setRec(nextMo,eid,{old_balance:cf});
+      try{ await saveCloud(nextMo,eid,name,nextRec,unit); }catch(e){ console.warn(e); }
+    }
+    autoRefresh(mo);
+    if(typeof setPill==='function') setPill('busy','Saving payroll…');
+    try{
+      await saveCloud(mo,eid,name,next,unit);
+      if(typeof setPill==='function') setPill('ok','Synced ✓');
+      if(typeof toast==='function') toast(field==='paid_amount'?'✓ Paid amount saved + next month balance updated':'✓ Payroll value saved','ok');
+    }catch(e){
+      if(typeof setPill==='function') setPill('err','Saved locally');
+      if(typeof toast==='function') toast(String(e&&e.message?e.message:e),'i');
+    }
+  };
+  window.unlockPayrollV2=function(mo,eid,name,field,currentVal,maxVal){
+    const id=`pv2-${eid}-${field}`;
+    const wrap=document.getElementById(id+'-wrap'); if(!wrap) return;
+    const min=(field==='old_balance')?-9999999:0;
+    const max=(maxVal===null||maxVal===undefined)?99999999:maxVal;
+    wrap.innerHTML=`<span class="pay-v2-edit"><input id="${id}-inp" type="number" value="${currentVal??0}" min="${min}" max="${max}" step="1"><button class="pay-v2-ok" onclick="window.commitPayrollV2('${jsq(mo)}',${eid},'${jsq(name)}','${field}',${min},${max})">✓</button><button class="pay-v2-cx" onclick="renderPayroll()">✕</button></span>`;
+    const inp=document.getElementById(id+'-inp'); if(inp){inp.focus(); inp.select(); inp.addEventListener('keydown',ev=>{if(ev.key==='Enter') window.commitPayrollV2(mo,eid,name,field,min,max); if(ev.key==='Escape') renderPayroll();});}
+  };
+  window.commitPayrollV2=function(mo,eid,name,field,min,max){
+    const inp=document.getElementById(`pv2-${eid}-${field}-inp`); if(!inp) return;
+    let val=n(inp.value); val=Math.max(min,Math.min(max,val));
+    window.setPayrollV2Field(mo,eid,name,field,val);
+  };
+  function pill(mo,eid,name,field,value,label,cls,maxVal){
+    const id=`pv2-${eid}-${field}`;
+    const display=(value===null||value===undefined)?'—':money(value);
+    return `<span id="${id}-wrap"><span class="pay-v2-pill ${cls||''}" title="${esc(label)}"><span>${display}</span><span class="pay-v2-ico" onclick="window.unlockPayrollV2('${jsq(mo)}',${eid},'${jsq(name)}','${field}',${value===null||value===undefined?0:value},${maxVal===undefined?'null':maxVal})">✏</span></span></span>`;
+  }
+  function netCell(r){
+    const paidPart=r.paidAmount===null?'':`<br><span style="color:#93c5fd">Paid ${money(r.paidAmount)} → Next ${money(r.nextBalance)}</span>`;
+    return `<div class="net-cell-wrap"><span class="pay-net-strong">${money(r.net)}</span><div class="net-formula-tip"><span style="color:#f59e0b;font-weight:700">Net Pay Breakdown</span><br>Salary ${money(r.sal)} + OT ${money(r.ota)} + Old ${money(r.oldBalance)} + Allow ${money(r.extraAllowance)} − Adv ${money(r.adv)}<br>= ${money(r.net)}${paidPart}</div></div>`;
+  }
+  window.renderPayroll=function(){
+    const pmEl=document.getElementById('pay-month'); if(!pmEl) return;
+    if(!pmEl.value) pmEl.value=new Date().toISOString().slice(0,7);
+    const mo=pmEl.value, dim=(typeof daysInMonth==='function')?daysInMonth(mo):30;
+    const pdEl=document.getElementById('pay-days'); if(pdEl) pdEl.value=dim;
+    const hdr=document.querySelector('#pg-payroll .card-hdr .cha');
+    if(hdr && !document.getElementById('pay-v2-note')){ const span=document.createElement('span'); span.id='pay-v2-note'; span.className='pay-v2-note'; span.textContent='Paid Amount → next month old balance auto'; hdr.appendChild(span); }
+    const rowsData=payrollRows(mo);
+    const prevChecked=new Set([...document.querySelectorAll('#pay-tbody .pay-chk:checked')].map(cb=>Number(cb.dataset.eid)));
+    const allWereChecked=prevChecked.size===0;
+    let T={monthSalary:0,sal:0,ota:0,adv:0,old:0,extra:0,net:0,paid:0,next:0};
+    const rows=rowsData.map((r,i)=>{
+      const e=r.emp||{}, dept=String(e.dept||e.department||'').trim()||'—', chk=allWereChecked||prevChecked.has(e.id);
+      T.monthSalary+=n(r.monthSalary); T.sal+=n(r.sal); T.ota+=n(r.ota); T.adv+=n(r.adv); T.old+=n(r.oldBalance); T.extra+=n(r.extraAllowance); T.net+=n(r.net); if(r.paidAmount!==null) T.paid+=n(r.paidAmount); if(r.nextBalance!==null) T.next+=n(r.nextBalance);
+      const nameSafe=jsq(e.name||'');
+      const remark=(window.PAYROLL_REMARKS&&window.PAYROLL_REMARKS[mo]&&window.PAYROLL_REMARKS[mo][e.id])||'';
+      const otDisp=n(r.ota)!==0?(n(r.ota)>0?`<span class="ca mono">${money(r.ota)}</span>`:`<span class="cr mono">${money(r.ota)}</span>`):'<span class="cm">—</span>';
+      const nextCls=r.nextBalance===null?'':(r.nextBalance>0?'next-pos':(r.nextBalance<0?'next-neg':'next-zero'));
+      const paidCls=r.paidAmount===null?'paid':'paid';
+      const daysColor=r.daysP>=25?'#16a34a':(r.daysP>=15?'#d97706':'#dc2626');
+      return `<tr class="${chk?'pay-row-selected':''}">
+        <td style="text-align:center;padding:5px 6px"><input type="checkbox" class="pay-chk" data-eid="${e.id}" ${chk?'checked':''} onchange="payrollChkChange(this)"></td>
+        <td class="cm" style="text-align:center;font-size:11px">${i+1}</td>
+        <td><div style="font-weight:600;font-size:11px;line-height:1.3">${esc(e.name||'')}</div><div style="font-size:10px;color:var(--muted);margin-top:1px">${esc(dept)}</div></td>
+        <td>${pill(mo,e.id,e.name||'','salary_override',r.monthSalary,'Month salary: default comes from last saved month','salary',9999999)}</td>
+        <td style="text-align:center"><span class="badge b${e.shift}">${e.shift}h</span></td>
+        <td style="text-align:center"><button class="btn btn-sm" style="color:${daysColor};font-weight:700;min-width:30px" onclick="openEmpAttendanceModal('${mo}',${e.id},'${nameSafe}')">${r.daysP}</button></td>
+        <td style="text-align:center">${n(r.oth)>0?`<span class="badge bot">+${n(r.oth).toFixed(1)}h</span>`:(n(r.oth)<0?`<span class="badge ba">${n(r.oth).toFixed(1)}h</span>`:'<span class="cm">0</span>')}</td>
+        <td class="mono" style="font-weight:500">${money(r.sal)}</td>
+        <td>${otDisp}</td>
+        <td>${pill(mo,e.id,e.name||'','advance',r.adv,'Advance deducted from net pay','',r.maxAdvance)}</td>
+        <td>${pill(mo,e.id,e.name||'','old_balance',r.oldBalance,'Old balance / adjustment. Positive adds, negative deducts.','',9999999)}</td>
+        <td>${pill(mo,e.id,e.name||'','extra_allowance',r.extraAllowance,'Extra allowance','',9999999)}</td>
+        <td>${netCell(r)}</td>
+        <td>${pill(mo,e.id,e.name||'','paid_amount',r.paidAmount,'Actual amount paid to employee','paid',9999999)}</td>
+        <td><span class="pay-v2-pill ${nextCls}">${r.nextBalance===null?'—':money(r.nextBalance)}</span></td>
+        <td><input class="remark-inp" type="text" placeholder="note…" value="${esc(remark).replace(/"/g,'&quot;')}" onchange="setPayrollRemark('${mo}',${e.id},this.value)" style="width:110px;font-size:11px;padding:3px 7px;border-radius:5px"></td>
+      </tr>`;
+    }).join('');
+    const body=document.getElementById('pay-tbody'); if(body) body.innerHTML=rows||'<tr><td colspan="16" style="text-align:center;padding:20px;color:var(--muted)">No payroll data</td></tr>';
+    const thead=document.querySelector('#pg-payroll .card table.tbl thead tr');
+    if(thead) thead.innerHTML=`<th style="width:28px"><input type="checkbox" id="pay-chk-all" onchange="payrollSelectAll(this.checked)"></th><th>#</th><th style="min-width:135px">Name · Dept</th><th>Month Sal</th><th>Shift</th><th>Days</th><th>OT</th><th>Salary</th><th>OT ₹</th><th>Adv.</th><th>Old Bal</th><th>Allow.</th><th>Net</th><th>Paid</th><th>Next Bal</th><th>Note</th>`;
+    const foot=document.getElementById('pay-tfoot');
+    if(foot) foot.innerHTML=`<td></td><td></td><td style="font-weight:600">TOTAL (${rowsData.length} emp)</td><td class="mono">${money(T.monthSalary)}</td><td></td><td></td><td></td><td class="mono">${money(T.sal)}</td><td class="mono ca">${money(T.ota)}</td><td class="mono ca">${money(T.adv)}</td><td class="mono cb">${money(T.old)}</td><td class="mono cg">${money(T.extra)}</td><td class="mono" style="font-size:13px;color:var(--green);font-weight:700">${money(T.net)}</td><td class="mono cb">${money(T.paid)}</td><td class="mono ${T.next<0?'cr':'cb'}">${money(T.next)}</td><td></td>`;
+    const stats=document.getElementById('pay-stats');
+    if(stats) stats.innerHTML=`
+      <div class="stat-card" style="border-left:4px solid var(--green)"><div class="stat-label">Net Payable</div><div class="stat-val sv-g" style="font-size:20px">${money(T.net)}</div><div class="stat-calc">before actual payment</div></div>
+      <div class="stat-card" style="border-left:4px solid #0e7490"><div class="stat-label">Paid Amount</div><div class="stat-val" style="font-size:20px;color:#0e7490">${money(T.paid)}</div><div class="stat-calc">entered by you</div></div>
+      <div class="stat-card" style="border-left:4px solid ${T.next<0?'#dc2626':'#2563eb'}"><div class="stat-label">Carry to Next Month</div><div class="stat-val" style="font-size:20px;color:${T.next<0?'#dc2626':'#2563eb'}">${money(T.next)}</div><div class="stat-calc">Net − Paid</div></div>
+      <div class="stat-card" style="border-left:4px solid var(--purple)"><div class="stat-label">Salary + OT</div><div class="stat-val" style="font-size:20px;color:var(--purple)">${money(T.sal+T.ota)}</div><div class="stat-calc">Salary ${money(T.sal)} + OT ${money(T.ota)}</div></div>`;
+    if(typeof payrollUpdateSelBadge==='function') payrollUpdateSelBadge();
+  };
+  window.exportPayrollExcel=function(){
+    const mo=document.getElementById('pay-month')?.value || new Date().toISOString().slice(0,7);
+    const rowsData=payrollRows(mo);
+    const selected=new Set([...document.querySelectorAll('#pay-tbody .pay-chk:checked')].map(cb=>Number(cb.dataset.eid)));
+    if(!selected.size){ if(typeof toast==='function') toast('Select at least one employee to export','err'); return; }
+    const data=rowsData.filter(r=>selected.has(r.emp.id)).map((r,i)=>({'SN':i+1,'Name':r.emp.name,'Department':String(r.emp.dept||r.emp.department||''),'Month Salary':r.monthSalary,'Shift':(r.emp.shift||8)+'h','Days':r.daysP,'OT Hrs':r.oth,'Salary Amt':r.sal,'OT Amt':r.ota,'Advance':r.adv,'Old Balance / Adj.':r.oldBalance,'Extra Allowance':r.extraAllowance,'Net Payable':r.net,'Paid Amount':r.paidAmount===null?'':r.paidAmount,'Next Month Balance':r.nextBalance===null?'':r.nextBalance,'Remarks':(window.PAYROLL_REMARKS&&window.PAYROLL_REMARKS[mo]&&window.PAYROLL_REMARKS[mo][r.emp.id])||'','Bank Details':r.bank||'','IFSC':r.ifsc||''}));
+    if(!window.XLSX){ if(typeof toast==='function') toast('Excel library not loaded. Check internet and refresh.','err'); return; }
+    const ws=XLSX.utils.json_to_sheet(data); ws['!cols']=[{wch:5},{wch:26},{wch:16},{wch:13},{wch:7},{wch:7},{wch:8},{wch:12},{wch:12},{wch:12},{wch:16},{wch:15},{wch:13},{wch:12},{wch:18},{wch:20},{wch:24},{wch:14}];
+    const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'Payroll '+mo); XLSX.writeFile(wb,'Payroll_'+mo+(selected.size<rowsData.length?'_partial':'')+'.xlsx');
+    if(typeof toast==='function') toast(`Exported ${data.length} employee(s) to Excel`,'ok');
+  };
+  const oldBoot=window.boot;
+  if(typeof oldBoot==='function'){
+    window.boot=async function(){ const res=await oldBoot.apply(this,arguments); mergeLocalStore(); try{renderPayroll();}catch(e){} return res; };
+  }
+  setTimeout(()=>{try{mergeLocalStore(); renderPayroll();}catch(e){console.warn('Payroll V2 render skipped',e);}},1800);
+})();
+</script>
+
+
+
+<!-- Payroll screen-fit patch: compact layout without changing calculation logic -->
+<style id="payroll-screen-fit-style">
+  #pg-payroll{padding:12px 14px!important;}
+  #pg-payroll .stat-row{grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:10px;}
+  #pg-payroll .stat-card{padding:10px 12px;border-radius:10px;min-height:58px;}
+  #pg-payroll .stat-label{font-size:8.5px;margin-bottom:4px;letter-spacing:.6px;}
+  #pg-payroll .stat-val{font-size:16px!important;line-height:1.1;}
+  #pg-payroll .stat-calc{font-size:9px;color:var(--muted);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  #pg-payroll .card{margin-bottom:10px;}
+  #pg-payroll .card-hdr{padding:9px 12px;gap:6px;align-items:center;}
+  #pg-payroll .card-hdr h3{font-size:12px;line-height:1.2;max-width:455px;}
+  #pg-payroll .card-hdr h3 span{font-size:9.5px!important;}
+  #pg-payroll .card-hdr .cha{gap:5px;justify-content:flex-end;}
+  #pg-payroll .card-hdr .cha label{font-size:10px!important;}
+  #pg-payroll .btn-sm{padding:3px 8px;font-size:10.5px;}
+  #pg-payroll #pay-month{width:116px!important;padding:5px 7px;}
+  #pg-payroll #pay-days{width:44px!important;padding:5px 6px;}
+  #pg-payroll #pay-sel-badge{font-size:10px!important;padding:0 2px!important;}
+  #pg-payroll .pay-v2-note{font-size:9px!important;padding:3px 7px!important;}
+  #pg-payroll .scrollable{max-height:calc(100vh - 205px)!important;overflow:auto!important;border-top:1px solid var(--border);}
+  #pg-payroll .tbl,
+  #pg-payroll .tbl.payroll-main-table,
+  #pg-payroll .card table.tbl{min-width:1190px!important;width:100%;table-layout:fixed;font-size:10.5px;}
+  #pg-payroll .tbl.payroll-main-table th,
+  #pg-payroll .tbl.payroll-main-table td,
+  #pg-payroll .card table.tbl th,
+  #pg-payroll .card table.tbl td{padding:4px 5px!important;vertical-align:middle;}
+  #pg-payroll table.tbl thead th{top:0!important;z-index:9!important;background:#f9fafb!important;}
+  #pg-payroll .tbl th{font-size:8.5px!important;letter-spacing:.35px;line-height:1.15;white-space:normal;}
+  #pg-payroll .tbl td{font-size:10.5px!important;line-height:1.18;}
+  #pg-payroll .tbl th:nth-child(1),#pg-payroll .tbl td:nth-child(1){width:28px!important;text-align:center;}
+  #pg-payroll .tbl th:nth-child(2),#pg-payroll .tbl td:nth-child(2){width:30px!important;text-align:center;}
+  #pg-payroll .tbl th:nth-child(3),#pg-payroll .tbl td:nth-child(3){width:145px!important;}
+  #pg-payroll .tbl th:nth-child(4),#pg-payroll .tbl td:nth-child(4){width:86px!important;}
+  #pg-payroll .tbl th:nth-child(5),#pg-payroll .tbl td:nth-child(5){width:45px!important;text-align:center;}
+  #pg-payroll .tbl th:nth-child(6),#pg-payroll .tbl td:nth-child(6){width:48px!important;text-align:center;}
+  #pg-payroll .tbl th:nth-child(7),#pg-payroll .tbl td:nth-child(7){width:54px!important;text-align:center;}
+  #pg-payroll .tbl th:nth-child(8),#pg-payroll .tbl td:nth-child(8){width:78px!important;}
+  #pg-payroll .tbl th:nth-child(9),#pg-payroll .tbl td:nth-child(9){width:66px!important;}
+  #pg-payroll .tbl th:nth-child(10),#pg-payroll .tbl td:nth-child(10){width:78px!important;}
+  #pg-payroll .tbl th:nth-child(11),#pg-payroll .tbl td:nth-child(11){width:84px!important;}
+  #pg-payroll .tbl th:nth-child(12),#pg-payroll .tbl td:nth-child(12){width:78px!important;}
+  #pg-payroll .tbl th:nth-child(13),#pg-payroll .tbl td:nth-child(13){width:82px!important;}
+  #pg-payroll .tbl th:nth-child(14),#pg-payroll .tbl td:nth-child(14){width:78px!important;}
+  #pg-payroll .tbl th:nth-child(15),#pg-payroll .tbl td:nth-child(15){width:90px!important;}
+  #pg-payroll .tbl th:nth-child(16),#pg-payroll .tbl td:nth-child(16){width:75px!important;}
+  #pg-payroll .pay-v2-pill{font-size:10px!important;padding:2px 5px!important;border-radius:5px!important;max-width:100%;overflow:hidden;text-overflow:ellipsis;}
+  #pg-payroll .pay-v2-ico{font-size:9px!important;padding:0 2px!important;}
+  #pg-payroll .pay-v2-edit input{width:68px!important;font-size:10px!important;padding:2px 4px!important;}
+  #pg-payroll .pay-v2-ok,#pg-payroll .pay-v2-cx{padding:1px 5px!important;font-size:10px!important;}
+  #pg-payroll .badge{font-size:9px!important;padding:1px 5px!important;}
+  #pg-payroll .pay-chk{width:13px!important;height:13px!important;}
+  #pg-payroll .remark-inp{width:68px!important;font-size:10px!important;padding:2px 5px!important;}
+  #pg-payroll .pay-net-strong{font-size:11px!important;}
+  #pg-payroll .net-formula-tip{font-size:10px!important;line-height:1.35!important;min-width:250px!important;}
+  #pg-payroll #pay-tfoot td{font-size:10px!important;padding:6px 5px!important;}
+  /* Keep employee identity visible while scrolling horizontally */
+  #pg-payroll .tbl th:nth-child(1),#pg-payroll .tbl td:nth-child(1){position:sticky;left:0;background:#fff;z-index:5;}
+  #pg-payroll .tbl th:nth-child(2),#pg-payroll .tbl td:nth-child(2){position:sticky;left:28px;background:#fff;z-index:5;}
+  #pg-payroll .tbl th:nth-child(3),#pg-payroll .tbl td:nth-child(3){position:sticky;left:58px;background:#fff;z-index:5;box-shadow:1px 0 0 var(--border);}
+  #pg-payroll .tbl thead th:nth-child(1),#pg-payroll .tbl thead th:nth-child(2),#pg-payroll .tbl thead th:nth-child(3){background:#f9fafb!important;z-index:11!important;}
+  #pg-payroll .tbl tfoot td:nth-child(1),#pg-payroll .tbl tfoot td:nth-child(2),#pg-payroll .tbl tfoot td:nth-child(3){background:#f3f4f6!important;z-index:6;}
+  @media (max-width:1200px){
+    #pg-payroll .stat-row{grid-template-columns:repeat(2,minmax(0,1fr));}
+    #pg-payroll .card-hdr h3{max-width:100%;}
+    #pg-payroll .card-hdr{align-items:flex-start;}
+  }
+</style>
+
 </body>
 </html>
 <!-- ══════════════════════════════════════════════════════════════
@@ -8081,5 +8432,76 @@ boot();
   setTimeout(()=>{ try{ patchDeptAdvView(); }catch(e){} }, 1600);
 })();
 </script>
+
+
+<!-- Payroll screen-fit patch: compact layout without changing calculation logic -->
+<style id="payroll-screen-fit-style">
+  #pg-payroll{padding:12px 14px!important;}
+  #pg-payroll .stat-row{grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:10px;}
+  #pg-payroll .stat-card{padding:10px 12px;border-radius:10px;min-height:58px;}
+  #pg-payroll .stat-label{font-size:8.5px;margin-bottom:4px;letter-spacing:.6px;}
+  #pg-payroll .stat-val{font-size:16px!important;line-height:1.1;}
+  #pg-payroll .stat-calc{font-size:9px;color:var(--muted);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  #pg-payroll .card{margin-bottom:10px;}
+  #pg-payroll .card-hdr{padding:9px 12px;gap:6px;align-items:center;}
+  #pg-payroll .card-hdr h3{font-size:12px;line-height:1.2;max-width:455px;}
+  #pg-payroll .card-hdr h3 span{font-size:9.5px!important;}
+  #pg-payroll .card-hdr .cha{gap:5px;justify-content:flex-end;}
+  #pg-payroll .card-hdr .cha label{font-size:10px!important;}
+  #pg-payroll .btn-sm{padding:3px 8px;font-size:10.5px;}
+  #pg-payroll #pay-month{width:116px!important;padding:5px 7px;}
+  #pg-payroll #pay-days{width:44px!important;padding:5px 6px;}
+  #pg-payroll #pay-sel-badge{font-size:10px!important;padding:0 2px!important;}
+  #pg-payroll .pay-v2-note{font-size:9px!important;padding:3px 7px!important;}
+  #pg-payroll .scrollable{max-height:calc(100vh - 205px)!important;overflow:auto!important;border-top:1px solid var(--border);}
+  #pg-payroll .tbl,
+  #pg-payroll .tbl.payroll-main-table,
+  #pg-payroll .card table.tbl{min-width:1190px!important;width:100%;table-layout:fixed;font-size:10.5px;}
+  #pg-payroll .tbl.payroll-main-table th,
+  #pg-payroll .tbl.payroll-main-table td,
+  #pg-payroll .card table.tbl th,
+  #pg-payroll .card table.tbl td{padding:4px 5px!important;vertical-align:middle;}
+  #pg-payroll table.tbl thead th{top:0!important;z-index:9!important;background:#f9fafb!important;}
+  #pg-payroll .tbl th{font-size:8.5px!important;letter-spacing:.35px;line-height:1.15;white-space:normal;}
+  #pg-payroll .tbl td{font-size:10.5px!important;line-height:1.18;}
+  #pg-payroll .tbl th:nth-child(1),#pg-payroll .tbl td:nth-child(1){width:28px!important;text-align:center;}
+  #pg-payroll .tbl th:nth-child(2),#pg-payroll .tbl td:nth-child(2){width:30px!important;text-align:center;}
+  #pg-payroll .tbl th:nth-child(3),#pg-payroll .tbl td:nth-child(3){width:145px!important;}
+  #pg-payroll .tbl th:nth-child(4),#pg-payroll .tbl td:nth-child(4){width:86px!important;}
+  #pg-payroll .tbl th:nth-child(5),#pg-payroll .tbl td:nth-child(5){width:45px!important;text-align:center;}
+  #pg-payroll .tbl th:nth-child(6),#pg-payroll .tbl td:nth-child(6){width:48px!important;text-align:center;}
+  #pg-payroll .tbl th:nth-child(7),#pg-payroll .tbl td:nth-child(7){width:54px!important;text-align:center;}
+  #pg-payroll .tbl th:nth-child(8),#pg-payroll .tbl td:nth-child(8){width:78px!important;}
+  #pg-payroll .tbl th:nth-child(9),#pg-payroll .tbl td:nth-child(9){width:66px!important;}
+  #pg-payroll .tbl th:nth-child(10),#pg-payroll .tbl td:nth-child(10){width:78px!important;}
+  #pg-payroll .tbl th:nth-child(11),#pg-payroll .tbl td:nth-child(11){width:84px!important;}
+  #pg-payroll .tbl th:nth-child(12),#pg-payroll .tbl td:nth-child(12){width:78px!important;}
+  #pg-payroll .tbl th:nth-child(13),#pg-payroll .tbl td:nth-child(13){width:82px!important;}
+  #pg-payroll .tbl th:nth-child(14),#pg-payroll .tbl td:nth-child(14){width:78px!important;}
+  #pg-payroll .tbl th:nth-child(15),#pg-payroll .tbl td:nth-child(15){width:90px!important;}
+  #pg-payroll .tbl th:nth-child(16),#pg-payroll .tbl td:nth-child(16){width:75px!important;}
+  #pg-payroll .pay-v2-pill{font-size:10px!important;padding:2px 5px!important;border-radius:5px!important;max-width:100%;overflow:hidden;text-overflow:ellipsis;}
+  #pg-payroll .pay-v2-ico{font-size:9px!important;padding:0 2px!important;}
+  #pg-payroll .pay-v2-edit input{width:68px!important;font-size:10px!important;padding:2px 4px!important;}
+  #pg-payroll .pay-v2-ok,#pg-payroll .pay-v2-cx{padding:1px 5px!important;font-size:10px!important;}
+  #pg-payroll .badge{font-size:9px!important;padding:1px 5px!important;}
+  #pg-payroll .pay-chk{width:13px!important;height:13px!important;}
+  #pg-payroll .remark-inp{width:68px!important;font-size:10px!important;padding:2px 5px!important;}
+  #pg-payroll .pay-net-strong{font-size:11px!important;}
+  #pg-payroll .net-formula-tip{font-size:10px!important;line-height:1.35!important;min-width:250px!important;}
+  #pg-payroll #pay-tfoot td{font-size:10px!important;padding:6px 5px!important;}
+  /* Keep employee identity visible while scrolling horizontally */
+  #pg-payroll .tbl th:nth-child(1),#pg-payroll .tbl td:nth-child(1){position:sticky;left:0;background:#fff;z-index:5;}
+  #pg-payroll .tbl th:nth-child(2),#pg-payroll .tbl td:nth-child(2){position:sticky;left:28px;background:#fff;z-index:5;}
+  #pg-payroll .tbl th:nth-child(3),#pg-payroll .tbl td:nth-child(3){position:sticky;left:58px;background:#fff;z-index:5;box-shadow:1px 0 0 var(--border);}
+  #pg-payroll .tbl thead th:nth-child(1),#pg-payroll .tbl thead th:nth-child(2),#pg-payroll .tbl thead th:nth-child(3){background:#f9fafb!important;z-index:11!important;}
+  #pg-payroll .tbl tfoot td:nth-child(1),#pg-payroll .tbl tfoot td:nth-child(2),#pg-payroll .tbl tfoot td:nth-child(3){background:#f3f4f6!important;z-index:6;}
+  @media (max-width:1200px){
+    #pg-payroll .stat-row{grid-template-columns:repeat(2,minmax(0,1fr));}
+    #pg-payroll .card-hdr h3{max-width:100%;}
+    #pg-payroll .card-hdr{align-items:flex-start;}
+  }
+</style>
+
 </body>
 </html>
