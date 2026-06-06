@@ -7817,8 +7817,8 @@ boot();
         const getRent = (typeof getDeptRent === 'function') ? getDeptRent : function(m,d){ try{ const RENT_KEY='bgsg_department_monthly_rent_v1'; const o=JSON.parse(localStorage.getItem(RENT_KEY)||'{}'); return Number((o[m]||{})[d]||0); }catch(e){ return 0; } };
         g.rent        = getRent(mo, dept);
         g.deptAdvance = getDeptAdv(mo, dept);
-        g.remaining   = g.netSalaryPayout - g.deptAdvance;
-        g.totalDeptCost = g.netSalaryPayout - g.deptAdvance + g.foodShare + g.rent;
+        g.remaining   = g.netSalaryPayout + g.rent - g.deptAdvance;
+        g.totalDeptCost = g.remaining + g.foodShare;
         g.otHours = Math.round(g.otHours * 100) / 100;
         rows.push(g);
       });
@@ -7881,7 +7881,7 @@ boot();
       <div class="dept-mini-card"><div class="k">Departments</div><div class="v">${rows.length}</div><div class="s">monthly view</div></div>
       <div class="dept-mini-card"><div class="k">Net Salary Payout</div><div class="v">${money(T.netSalaryPayout)}</div><div class="s">after emp advances</div></div>
       <div class="dept-mini-card" style="border-color:#fed7aa;background:#fff7ed"><div class="k" style="color:#b45309">Dept Advance Paid</div><div class="v" style="color:#b45309">${money(T.deptAdvance)}</div><div class="s">lump-sum paid out</div></div>
-      <div class="dept-mini-card" style="border-color:#bfdbfe;background:#eff6ff"><div class="k" style="color:#1d4ed8">Remaining to Pay</div><div class="v" style="color:#1d4ed8">${money(T.remaining)}</div><div class="s">net minus dept adv</div></div>
+      <div class="dept-mini-card" style="border-color:#bfdbfe;background:#eff6ff"><div class="k" style="color:#1d4ed8">Remaining to Pay</div><div class="v" style="color:#1d4ed8">${money(T.remaining)}</div><div class="s">net + rent − dept adv</div></div>
       <div class="dept-mini-card"><div class="k">Total Dept Cost</div><div class="v">${money(T.totalDeptCost)}</div><div class="s">remaining+food+rent</div></div>`;
   };
 
@@ -7913,8 +7913,8 @@ boot();
     groups.forEach((g,dept)=>{
       const getRent=(typeof getDeptRent==='function')?getDeptRent:function(m,d){try{const o=JSON.parse(localStorage.getItem('bgsg_department_monthly_rent_v1')||'{}');return Number((o[m]||{})[d]||0);}catch(e){return 0;}};
       g.rent=getRent(mo,dept); g.deptAdvance=getDeptAdv(mo,dept);
-      g.remaining=g.netSalaryPayout-g.deptAdvance;
-      g.totalDeptCost=g.remaining+g.foodShare+g.rent;
+      g.remaining=g.netSalaryPayout+g.rent-g.deptAdvance;
+      g.totalDeptCost=g.remaining+g.foodShare;
       g.otHours=Math.round(g.otHours*100)/100;
     });
     const exportRows=[...groups.values()].sort((a,b)=>a.department.localeCompare(b.department)).map(r=>({
@@ -8356,7 +8356,7 @@ boot();
       g.advance+=toN2(r.adv); g.netPayable+=toN2(r.net);
       g.children.push({name:(r.emp||{}).name||'',position:(r.emp||{}).position||(r.emp||{}).pos||'Employee',days:toN2(r.daysP),otHrs:toN2(r.oth),basic:toN2((r.emp||{}).salary),salary:toN2(r.sal),otAmount:toN2(r.ota),netPayable:toN2(r.net)});
     });
-    const allGs=[...gMap.entries()].map(([dept,g])=>({...g,department:dept,otHrs:Math.round(g.otHrs*100)/100,rent:getRentVal(mo2,dept),deptAdv:getAdv2(mo2,dept),remaining:g.netPayable-getAdv2(mo2,dept),total:g.netPayable+getRentVal(mo2,dept)})).sort((a,b)=>a.department.localeCompare(b.department));
+    const allGs=[...gMap.entries()].map(([dept,g])=>({...g,department:dept,otHrs:Math.round(g.otHrs*100)/100,rent:getRentVal(mo2,dept),deptAdv:getAdv2(mo2,dept),remaining:g.netPayable+getRentVal(mo2,dept)-getAdv2(mo2,dept),total:g.netPayable+getRentVal(mo2,dept)})).sort((a,b)=>a.department.localeCompare(b.department));
     const gs=selectedFilter==='ALL'?allGs:allGs.filter(g=>g.department===selectedFilter);
     if(!gs.length) return;
 
@@ -8396,7 +8396,7 @@ boot();
       <div class="dept-mini-card"><div class="k">OT Amount</div><div class="v">${T.otAmount<0?'-':''}${rupee2(Math.abs(T.otAmount))}</div><div class="s">overtime impact</div></div>
       <div class="dept-mini-card"><div class="k">Rent Amount</div><div class="v">${rupee2(T.rent)}</div><div class="s">department rent</div></div>
       <div class="dept-mini-card" style="border-color:#fed7aa!important;background:linear-gradient(180deg,#fff7ed,#ffedd5)!important"><div class="k" style="color:#9a3412">Dept Adv Paid</div><div class="v" style="color:#b45309">${rupee2(T.deptAdv)}</div><div class="s">lump-sum to contractor</div></div>
-      <div class="dept-mini-card" style="border-color:#bfdbfe!important;background:linear-gradient(180deg,#eff6ff,#dbeafe)!important"><div class="k" style="color:#1e40af">Remaining to Pay</div><div class="v" style="color:#1d4ed8">${rupee2(T.remaining)}</div><div class="s">net payable \u2212 dept adv</div></div>`;
+      <div class="dept-mini-card" style="border-color:#bfdbfe!important;background:linear-gradient(180deg,#eff6ff,#dbeafe)!important"><div class="k" style="color:#1e40af">Remaining to Pay</div><div class="v" style="color:#1d4ed8">${rupee2(T.remaining)}</div><div class="s">net + rent \u2212 dept adv</div></div>`;
   }
 
   /* clear helper */
