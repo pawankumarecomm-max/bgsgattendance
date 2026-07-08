@@ -219,6 +219,7 @@ label{font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:var(--mu
     <div class="topbar-r">
       <div id="pill" class="pill pill-busy"><div class="pdot"></div><span id="pill-txt">Loading…</span></div>
       <button class="btn btn-sm" onclick="boot(false)" title="Sync with Supabase">↻ Sync</button>
+      <button class="btn btn-sm" onclick="openSyncAuditModal()" title="Check every master employee against Supabase and fix mismatches">🔍 Audit Sync</button>
       <button class="btn btn-sm" onclick="restoreLatestBackup()" title="Restore the latest safe backup">⟲ Restore Backup</button>
       <button class="btn-add" onclick="goTo('employees',document.querySelectorAll('.nav')[1]);document.getElementById('add-form').classList.add('open')">+ Add Employee</button>
     </div>
@@ -296,7 +297,7 @@ label{font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:var(--mu
       </div>
       <div class="scrollable">
         <table class="tbl">
-          <thead><tr><th>#</th><th>Name</th><th>Department</th><th>Position</th><th>Salary/Month</th><th>Shift</th><th>Daily Rate</th><th>A/C Holder Name</th><th>Bank A/C</th><th>IFSC</th><th>Action</th></tr></thead>
+          <thead><tr><th>ID</th><th>Name</th><th>Department</th><th>Position</th><th>Salary/Month</th><th>Shift</th><th>Daily Rate</th><th>A/C Holder Name</th><th>Bank A/C</th><th>IFSC</th><th>Action</th></tr></thead>
           <tbody id="emp-tbody"><tr><td colspan="7" style="text-align:center;padding:24px;color:var(--muted)">Loading…</td></tr></tbody>
         </table>
       </div>
@@ -493,6 +494,7 @@ label{font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:var(--mu
           <input id="out-search" placeholder="Search employee name / department / role" style="width:260px" oninput="outstationSearchChanged()" onkeyup="outstationSearchChanged()">
           <button class="btn btn-sm" onclick="outstationSelectVisible(true)">✓ Select Visible</button>
           <button class="btn btn-sm" onclick="outstationSelectVisible(false)">Clear</button>
+          <button class="btn btn-sm" onclick="refreshOutstationEmployees()" title="Reload the employee list fresh from Supabase">↻ Refresh Employees</button>
           <button class="btn btn-p btn-sm" onclick="saveOutstationBulkAttendance()">💾 Save Bulk Attendance</button>
         </div>
       </div>
@@ -694,6 +696,26 @@ BOARD PLANT
       <table class="tbl">
         <thead><tr><th>#</th><th>Date</th><th>Status</th><th>IN Time</th><th>OUT Time</th><th>Worked Hrs</th><th>OT Hrs</th><th>Punctuality</th></tr></thead>
         <tbody id="emp-att-body"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div id="sync-audit-modal" class="modal-backdrop" onclick="if(event.target===this)closeSyncAuditModal()">
+  <div class="modal-card" style="width:min(980px,calc(100vw - 40px))">
+    <div class="card-hdr" style="position:sticky;top:0;background:#fff;z-index:2">
+      <h3>Sync Audit — Master Employee List vs Supabase</h3>
+      <div class="cha">
+        <button class="btn btn-sm" onclick="runSyncAudit()">↻ Re-check</button>
+        <button class="btn btn-sm" onclick="closeSyncAuditModal()">✕ Close</button>
+      </div>
+    </div>
+    <div id="sync-audit-summary" class="dept-sum" style="padding:14px 18px"></div>
+    <div id="sync-audit-breakdown" style="padding:0 18px 10px"></div>
+    <div class="scrollable" style="padding:0 18px 18px">
+      <table class="tbl">
+        <thead><tr><th>ID</th><th>Master Name</th><th>Supabase Status</th><th>Issue</th><th>Action</th></tr></thead>
+        <tbody id="sync-audit-body"></tbody>
       </table>
     </div>
   </div>
@@ -970,6 +992,120 @@ async function gasGet(params) {
     console.warn('Supabase write failed (offline mode):', writeErr.message);
     setPill('err','Offline – saved locally');
     throw writeErr; // re-throw so callers can show toast if needed
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   SYNC AUDIT — cross-check the known master employee list against
+   whatever Supabase actually has right now, so a soft-deleted
+   (status=INACTIVE) or never-inserted employee can't silently
+   disappear from the app without anyone noticing.
+══════════════════════════════════════════════════════════════ */
+function _auditEsc(s){ return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+function openSyncAuditModal(){
+  document.getElementById('sync-audit-modal').style.display='flex';
+  runSyncAudit();
+}
+function closeSyncAuditModal(){
+  document.getElementById('sync-audit-modal').style.display='none';
+}
+
+async function runSyncAudit(){
+  const summaryEl = document.getElementById('sync-audit-summary');
+  const breakdownEl = document.getElementById('sync-audit-breakdown');
+  const bodyEl = document.getElementById('sync-audit-body');
+  summaryEl.innerHTML = 'Checking Supabase directly (bypassing any cached/in-memory data)…';
+  breakdownEl.innerHTML = '';
+  bodyEl.innerHTML = '';
+  let liveRows;
+  try{
+    assertSupabaseReady();
+    liveRows = await sb(getSupabase().from(TABLES.EMP).select('*').limit(10000), 'Audit: load employees');
+  }catch(e){
+    summaryEl.innerHTML = '<span style="color:var(--red)">Could not reach Supabase to audit: '+_auditEsc(e.message)+'</span>';
+    return;
+  }
+  const allRows = ensureArray(liveRows);
+
+  // ── Raw breakdown by unit_name and status — this is independent of the
+  // app's scope filtering, so it reveals rows that silently get excluded
+  // from every view (e.g. a unit_name that doesn't exactly match one of
+  // the app's known units, or a row still marked INACTIVE).
+  const KNOWN_UNITS = (typeof LIVE_UNITS !== 'undefined') ? LIVE_UNITS : ['Jhajjar Unit 1','Bangalore','EPW Unit 2'];
+  const unitCounts = new Map(); // unitLabel -> {active, inactive, total}
+  allRows.forEach(r=>{
+    const rawUnit = String(r.unit_name || r.unit || '').trim();
+    const label = rawUnit || '(blank — defaults to Jhajjar Unit 1)';
+    if(!unitCounts.has(label)) unitCounts.set(label, {active:0, inactive:0});
+    const bucket = unitCounts.get(label);
+    if(String(r.status||'ACTIVE').toUpperCase()==='INACTIVE') bucket.inactive++; else bucket.active++;
+  });
+  let breakdownHtml = '<table class="tbl"><thead><tr><th>Unit name as stored in Supabase</th><th>Active</th><th>Inactive</th><th>Total</th><th>Recognized by app?</th></tr></thead><tbody>';
+  let grandActive=0, grandInactive=0;
+  [...unitCounts.entries()].sort((a,b)=>b[1].active+b[1].inactive-(a[1].active+a[1].inactive)).forEach(([label,c])=>{
+    grandActive+=c.active; grandInactive+=c.inactive;
+    const recognized = label.startsWith('(blank') || KNOWN_UNITS.includes(label);
+    breakdownHtml += '<tr'+(!recognized?' style="background:#fef2f2"':'')+'>'+
+      '<td>'+_auditEsc(label)+'</td><td>'+c.active+'</td><td>'+c.inactive+'</td><td>'+(c.active+c.inactive)+'</td>'+
+      '<td>'+(recognized ? '✓ yes' : '⚠ NO — this text does not exactly match Jhajjar Unit 1 / Bangalore / EPW Unit 2, so these rows are invisible even under All Units scope') +'</td></tr>';
+  });
+  breakdownHtml += '</tbody></table>';
+  breakdownHtml = '<div style="margin:6px 0 10px;font-size:12px;color:var(--muted)">Raw Supabase employees table: <b>'+allRows.length+'</b> total rows &nbsp;(<b>'+grandActive+'</b> active, <b>'+grandInactive+'</b> inactive/soft-deleted)</div>' + breakdownHtml;
+  breakdownEl.innerHTML = breakdownHtml;
+
+  const byId = new Map();
+  allRows.forEach(r=>byId.set(num(r.id), r));
+
+  const issues = []; // {id, masterName, status, issue}
+  let okCount = 0;
+  CURRENT_EMPLOYEE_MASTER.forEach(master=>{
+    const row = byId.get(num(master.id));
+    if(!row){
+      issues.push({id:master.id, masterName:master.name, status:'(no row in Supabase)', issue:'MISSING'});
+    } else if(String(row.status||'ACTIVE').toUpperCase()==='INACTIVE'){
+      issues.push({id:master.id, masterName:master.name, status:row.status, issue:'INACTIVE (soft-deleted)'});
+    } else if(String(row.name||'').trim().toUpperCase() !== String(master.name||'').trim().toUpperCase()){
+      issues.push({id:master.id, masterName:master.name, status:'Name in Supabase: "'+row.name+'"', issue:'NAME_MISMATCH'});
+    } else {
+      okCount++;
+    }
+  });
+
+  const extraLive = allRows.filter(r=>!CURRENT_EMPLOYEE_MASTER.some(m=>num(m.id)===num(r.id)));
+
+  summaryEl.innerHTML =
+    '<b>'+okCount+'</b> of '+CURRENT_EMPLOYEE_MASTER.length+' Jhajjar master employees match Supabase correctly. ' +
+    (issues.length ? '<b style="color:var(--red)">'+issues.length+' issue(s) found below.</b>' : '<b style="color:var(--green)">No issues found for the Jhajjar master list.</b>') +
+    (extraLive.length ? ' &nbsp;('+extraLive.length+' other employee row(s) in Supabase outside the Jhajjar master list — see breakdown above for where they belong.)' : '');
+
+  if(!issues.length){ bodyEl.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--muted)">Everything matches ✓</td></tr>'; return; }
+
+  bodyEl.innerHTML = issues.map(it=>{
+    const badgeColor = it.issue==='MISSING' ? '#fef2f2;color:#b91c1c' : it.issue==='INACTIVE (soft-deleted)' ? '#fffbeb;color:#b45309' : '#eff6ff;color:#1d4ed8';
+    const actionBtn = it.issue==='NAME_MISMATCH'
+      ? '<span style="color:var(--muted);font-size:11px">Check manually — names differ</span>'
+      : '<button class="btn btn-sm" onclick="fixSyncIssue('+it.id+',\''+(it.issue==='MISSING'?'MISSING':'INACTIVE')+'\')">Fix now</button>';
+    return '<tr><td>'+it.id+'</td><td>'+_auditEsc(it.masterName)+'</td><td>'+_auditEsc(it.status)+'</td>'+
+      '<td><span class="badge" style="background:'+badgeColor+'">'+it.issue+'</span></td><td>'+actionBtn+'</td></tr>';
+  }).join('');
+}
+
+async function fixSyncIssue(id, issueType){
+  const master = CURRENT_EMPLOYEE_MASTER.find(m=>num(m.id)===num(id));
+  if(!master) return;
+  try{
+    if(issueType==='MISSING'){
+      await sb(getSupabase().from(TABLES.EMP).upsert([empRow(master)], { onConflict:'id' }), 'Re-add employee');
+      toast('✓ Re-added '+master.name+' to Supabase','ok');
+    } else { // INACTIVE
+      await sb(getSupabase().from(TABLES.EMP).update({status:'ACTIVE'}).eq('id', num(id)), 'Reactivate employee');
+      toast('✓ Reactivated '+master.name,'ok');
+    }
+    await runSyncAudit();
+    await boot(true);
+  }catch(e){
+    toast('Fix failed: '+e.message,'err');
   }
 }
 
@@ -1418,7 +1554,7 @@ function renderEmpTable(){
     const ifsc=String(e.ifsc_code||'').toUpperCase();
     const ahn=String(e.account_holder_name||'');
     return `<tr>
-    <td class="cm">${i+1}</td><td style="font-weight:500">${e.name}</td>
+    <td class="cm">${e.id}</td><td style="font-weight:500">${e.name}</td>
     <td><span class="badge b8">${normalizeDepartment(e.dept)}</span></td>
     <td class="cm">${e.pos}</td><td class="mono">₹${fmt(e.salary)}</td>
     <td><span class="badge b${e.shift}">${e.shift}h</span></td>
@@ -3527,7 +3663,7 @@ boot();
       const ifsc=String(e.ifsc_code||'').toUpperCase();
       const ahn=String(e.account_holder_name||'');
       return `<tr>
-      <td class="cm">${i+1}</td>
+      <td class="cm">${e.id}</td>
       <td style="font-weight:500">${e.name}${showUnit?`<span class="unit-subline">${esc(e.unit)}</span>`:''}</td>
       <td><span class="badge b8">${normalizeDepartment(e.dept)}</span></td>
       <td class="cm">${e.pos}</td>
@@ -5095,6 +5231,18 @@ boot();
     return [];
   }
 
+  function getLiveEmployees(){
+    // EMPS is declared with `let` in the main script, so it is NOT available as window.EMPS.
+    // Read the global lexical EMPS directly; fallback to window.EMPS only if a future build exposes it.
+    try{
+      if(typeof EMPS !== 'undefined' && Array.isArray(EMPS)) return EMPS;
+    }catch(e){}
+    try{
+      if(window.EMPS && Array.isArray(window.EMPS)) return window.EMPS;
+    }catch(e){}
+    return [];
+  }
+
   function activeEmployeesFinal(){
     const map = new Map();
     function add(arr, priority){
@@ -5120,7 +5268,7 @@ boot();
       });
     }
     add(getSeedEmployees(), 'seed');
-    add(window.EMPS, 'live');
+    add(getLiveEmployees(), 'live');
     return [...map.values()].sort((a,b)=>a.name.localeCompare(b.name));
   }
 
@@ -5226,7 +5374,7 @@ boot();
       const shift=Number(e.shift||8);
       return `<tr id="out-row-${H(e.id)}">
         <td><input class="out-check" type="checkbox" data-eid="${H(e.id)}" onchange="updateOutstationTotals()"></td>
-        <td class="cm">${i+1}</td>
+        <td class="cm">${H(e.id)}</td>
         <td><span class="out-name">${H(e.name)}</span><span class="out-sub">${H(pos)}</span></td>
         <td>${H(dept)}</td>
         <td><span class="badge b${shift}">${shift}h</span></td>
@@ -5238,6 +5386,17 @@ boot();
     }).join('');
 
     if(typeof updateOutstationTotals==='function') updateOutstationTotals();
+  };
+
+  window.refreshOutstationEmployees = async function(){
+    if(typeof setPill==='function') setPill('busy','Refreshing employees…');
+    try{
+      await boot(true); // reloads window.EMPS fresh from Supabase
+    }catch(e){}
+    ensureEmployeeSelect();
+    renderOutstationBulk();
+    const count = activeEmployeesFinal().length;
+    if(typeof toast==='function') toast('↻ '+count+' employees loaded from Supabase','ok');
   };
 
   window.initOutstationBulk = function(){
@@ -5318,10 +5477,13 @@ boot();
 
     try{
       if(typeof saveLocalCache==='function') saveLocalCache({reason:'outstation-bulk-attendance', backupCurrent:true, backupReason:'before-outstation-bulk'});
-      if(window.supa && typeof safeUpsertAttendance==='function'){
-        await safeUpsertAttendance(rows, 'outstation bulk attendance');
-      }else if(window.supa){
-        await supa.from(TABLES.ATT).upsert(rows, {onConflict:'employee_id,date'});
+      // NOTE: previously this checked window.supa / safeUpsertAttendance, neither of
+      // which is ever defined anywhere in this file — so the cloud save silently
+      // never ran and outstation attendance only lived in memory until the next
+      // sync wiped it out. Use the same working Supabase save path as every other
+      // attendance save in the app (gasGet -> getSupabase().from(TABLES.ATT).upsert).
+      for(let i=0;i<rows.length;i+=400){
+        await gasGet({action:'saveAttendance', rows:rows.slice(i,i+400)});
       }
       if(typeof setPill==='function') setPill('ok','Synced ✓');
       if(typeof toast==='function') toast('✓ Outstation attendance saved for '+selected.length+' employee(s)','ok');
